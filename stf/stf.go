@@ -29,9 +29,15 @@ func (s FunctionState) String() string {
 
 type Function interface {
 	AddInStream(io.ReadCloser) error
+	AddInSetter(func() ([]byte, error)) error
+	AddInMarshaller(func() (any, error), func(any) ([]byte, error)) error
+	AddInStreamSetter(func() ([]byte, error)) error
+	AddInStreamMarshaller(func() (any, error), func(any) ([]byte, error)) error
 	AddOutStream(io.WriteCloser) error
-	AddOutGetter(func() ([]byte, error)) error
-	AddOutUnmarshaler(func(data []byte, v any) error) error
+	AddOutGetter(func([]byte) error) error
+	AddOutUnmarshaller(func(data []byte, v any) error, func(any) error) error
+	AddOutStreamGetter(func([]byte) error) error
+	AddOutStreamUnmarshaller(func(data []byte, v any) error, func(any) error) error
 	Run() error
 	Start() error
 	Wait() error
@@ -76,11 +82,51 @@ func (fc *function) AddInStream(rc io.ReadCloser) error {
 	return nil
 }
 
+func (fc *function) AddInSetter(f func() ([]byte, error)) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (fc *function) AddInMarshaller(f func() (any, error), f2 func(any) ([]byte, error)) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (fc *function) AddInStreamSetter(f func() ([]byte, error)) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (fc *function) AddInStreamMarshaller(f func() (any, error), f2 func(any) ([]byte, error)) error {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (fc *function) AddOutStream(wc io.WriteCloser) error {
 	fc.mux.Lock()
 	defer fc.mux.Unlock()
 	fc.outStreams = append(fc.outStreams, wc)
 	return nil
+}
+
+func (fc *function) AddOutGetter(f func([]byte) error) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (fc *function) AddOutUnmarshaller(f func(data []byte, v any) error, f2 func(any) error) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (fc *function) AddOutStreamGetter(f func([]byte) error) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (fc *function) AddOutStreamUnmarshaller(f func(data []byte, v any) error, f2 func(any) error) error {
+	//TODO implement me
+	panic("implement me")
 }
 
 func (fc *function) Start() error {
