@@ -52,6 +52,8 @@ type istream struct {
 	bset         func([]byte) error
 	unmarshaller func(data []byte, v any) error
 	aset         func(any) error
+	bSize        int
+	setOnce      bool
 	read         int
 	err          error
 }
@@ -62,16 +64,17 @@ type ostream struct {
 	bget       func() ([]byte, error)
 	aget       func() (any, error)
 	marshaller func(any) ([]byte, error)
+	getOnce    bool
 	written    int
 	err        error
 }
 
 type function struct {
+	ctx        context.Context
+	sw         StartWaiter
 	mux        sync.Mutex
 	state      FunctionState
-	sw         StartWaiter
 	err        error
-	ctx        context.Context
 	inStreams  []istream
 	outStreams []ostream
 }
@@ -91,48 +94,53 @@ func (fc *function) setState(newState FunctionState, err error) error {
 	return err
 }
 
-func (fc *function) addInStream(is istream) error {
+func (fc *function) addInStream(rc io.ReadCloser, is istream) error {
 	fc.mux.Lock()
 	defer fc.mux.Unlock()
 	if err := fc.mustBeInState(StateInit); err != nil {
 		return fc.setState(StateFinished, err)
+	}
+	is.rc = newCancelableReadCloser(fc.ctx, rc)
+	if is.bSize == 0 {
+		is.bSize = 128
 	}
 	fc.inStreams = append(fc.inStreams, is)
 	return nil
 }
 
 func (fc *function) AddInStream(rc io.ReadCloser, set func([]byte) error) error {
-	return fc.addInStream(istream{rc: rc, isRaw: true, bset: set})
+	return fc.addInStream(rc, istream{isRaw: true, bset: set})
 }
 
 func (fc *function) AddInStreamSetter(rc io.ReadCloser, set func([]byte) error) error {
-	return fc.addInStream(istream{rc: rc, bset: set})
+	return fc.addInStream(rc, istream{bset: set})
 }
 
 func (fc *function) AddInStreamUnmarshaller(rc io.ReadCloser, unmarshal func(data []byte, v any) error, set func(any) error) error {
-	return fc.addInStream(istream{rc: rc, unmarshaller: unmarshal, aset: set})
+	return fc.addInStream(rc, istream{unmarshaller: unmarshal, aset: set})
 }
 
-func (fc *function) addOutStream(os ostream) error {
+func (fc *function) addOutStream(wc io.WriteCloser, os ostream) error {
 	fc.mux.Lock()
 	defer fc.mux.Unlock()
 	if err := fc.mustBeInState(StateInit); err != nil {
 		return fc.setState(StateFinished, err)
 	}
+	os.wc = newCancelableWriteCloser(fc.ctx, wc)
 	fc.outStreams = append(fc.outStreams, os)
 	return nil
 }
 
 func (fc *function) AddOutStream(wc io.WriteCloser, get func() ([]byte, error)) error {
-	return fc.addOutStream(ostream{wc: wc, isRaw: true, bget: get})
+	return fc.addOutStream(wc, ostream{isRaw: true, bget: get})
 }
 
 func (fc *function) AddOutStreamGetter(wc io.WriteCloser, get func() ([]byte, error)) error {
-	return fc.addOutStream(ostream{wc: wc, bget: get})
+	return fc.addOutStream(wc, ostream{bget: get})
 }
 
 func (fc *function) AddOutStreamMarshaller(wc io.WriteCloser, get func() (any, error), marshal func(any) ([]byte, error)) error {
-	return fc.addOutStream(ostream{wc: wc, aget: get, marshaller: marshal})
+	return fc.addOutStream(wc, ostream{aget: get, marshaller: marshal})
 }
 
 func (fc *function) Start() error {
