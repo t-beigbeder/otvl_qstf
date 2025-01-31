@@ -96,11 +96,11 @@ func (fc *function) GetOutStream(s string) OutStream {
 	return os
 }
 
-func (fc *function) activateStream(st *stream) {
+func (fc *function) activateStream(st *stream, sti Stream) {
 	fc.wg.Add(1)
 	go func() {
 		defer fc.wg.Done()
-		st.loop()
+		st.loop(sti)
 	}()
 }
 
@@ -130,7 +130,7 @@ func (fc *function) AddInStream(rr io.Reader, opts ...IstOption) (InStream, erro
 		opts:   sopt,
 	}
 	fc.ins[sopt.StOptions.Name] = is
-	fc.activateStream(&is.stream)
+	fc.activateStream(&is.stream, is)
 	return is, nil
 }
 
@@ -160,7 +160,7 @@ func (fc *function) AddOutStream(wr io.Writer, opts ...OstOption) (OutStream, er
 		opts:   sopt,
 	}
 	fc.outs[sopt.StOptions.Name] = os
-	fc.activateStream(&os.stream)
+	fc.activateStream(&os.stream, os)
 	return os, nil
 }
 

@@ -28,10 +28,10 @@ func (s StreamState) String() string {
 type Stream interface {
 	GetName() string
 	GetState() StreamState
-	loop()
 	Start()
 	Stop()
 	Terminate()
+	looper() any
 }
 
 type InStream interface {
@@ -78,7 +78,7 @@ func (st *stream) GetState() StreamState {
 	return st.state
 }
 
-func (st *stream) loop() {
+func (st *stream) loop(sti Stream) {
 	for {
 		select {
 		case <-st.ctx.Done():
@@ -87,6 +87,8 @@ func (st *stream) loop() {
 			switch msg {
 			case msgStart:
 				st.state = StRunning
+				v := sti.looper()
+				_ = v
 				// TODO: run loop
 			case msgStop:
 				st.state = StStopped
@@ -119,6 +121,10 @@ type inStream struct {
 
 var _ InStream = &inStream{}
 
+func (is *inStream) looper() any {
+	return nil
+}
+
 type outStream struct {
 	stream
 	wr      io.Writer
@@ -127,3 +133,7 @@ type outStream struct {
 }
 
 var _ OutStream = &outStream{}
+
+func (os *outStream) looper() any {
+	return nil
+}
