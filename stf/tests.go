@@ -10,7 +10,7 @@ import (
 )
 
 func toJsonBytes(a any) ([]byte, error) {
-	bs, err := json.Marshal("value for test")
+	bs, err := json.Marshal(a)
 	if err != nil {
 		return nil, err
 	}
