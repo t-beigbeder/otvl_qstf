@@ -36,6 +36,7 @@ type Function interface {
 	Run() error
 	Start() error
 	Wait() error
+	Terminate()
 	State() FunctionState
 	Error() error
 }
@@ -46,15 +47,17 @@ type StartWaiter interface {
 }
 
 type function struct {
-	name  string
-	ctx   context.Context
-	sw    StartWaiter
-	mux   sync.Mutex
-	state FunctionState
-	err   error
-	ins   map[string]*inStream
-	outs  map[string]*outStream
-	wg    sync.WaitGroup
+	name       string
+	ctx        context.Context
+	sw         StartWaiter
+	mux        sync.Mutex
+	state      FunctionState
+	terminable bool
+	ctrChan    chan struct{}
+	err        error
+	ins        map[string]*inStream
+	outs       map[string]*outStream
+	wg         sync.WaitGroup
 }
 
 var _ Function = &function{}
@@ -99,7 +102,7 @@ func (fc *function) GetOutStream(s string) OutStream {
 
 func (fc *function) activateStream(st *stream, sti Stream) {
 	fc.wg.Add(1)
-	st.ctrChan = make(chan ctrlMsg)
+	st.ctrChan = make(chan ctrlMsg, 1)
 	go func() {
 		defer fc.wg.Done()
 		st.loop(sti)
@@ -175,7 +178,30 @@ func (fc *function) Start() error {
 	if err := fc.sw.Start(); err != nil {
 		return fc.setState(StateFinished, err)
 	}
-	return fc.setState(StateStarted, nil)
+	fc.setState(StateStarted, nil)
+	if !fc.terminable {
+		return nil
+	}
+
+	fc.wg.Add(1)
+	fc.ctrChan = make(chan struct{}, 1)
+	go func() {
+		defer fc.wg.Done()
+		for {
+			select {
+			case <-fc.ctrChan:
+				for _, in := range fc.ins {
+					in.stream.Terminate()
+				}
+				for _, out := range fc.outs {
+					out.stream.Terminate()
+				}
+				fc.setState(StateFinished, nil)
+				return
+			}
+		}
+	}()
+	return nil
 }
 
 func (fc *function) Wait() error {
@@ -196,6 +222,12 @@ func (fc *function) Run() error {
 		return err
 	}
 	return fc.Wait()
+}
+
+func (fc *function) Terminate() {
+	if fc.terminable {
+		fc.ctrChan <- struct{}{}
+	}
 }
 
 func (fc *function) State() FunctionState {
@@ -220,11 +252,12 @@ func NewFunction(ctx context.Context, sw StartWaiter, opts ...FcOption) (Functio
 		return nil, err
 	}
 	fc := &function{
-		name: fopt.Name,
-		ctx:  ctx,
-		sw:   sw,
-		ins:  make(map[string]*inStream, 1),
-		outs: make(map[string]*outStream, 1),
+		name:       fopt.Name,
+		terminable: fopt.Terminable,
+		ctx:        ctx,
+		sw:         sw,
+		ins:        make(map[string]*inStream, 1),
+		outs:       make(map[string]*outStream, 1),
 	}
 	return fc, nil
 }
