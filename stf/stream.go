@@ -167,7 +167,7 @@ func (is *inStream) readDiscrete() looperOut {
 		return looperOut{err: err}
 	}
 	bln := binary.BigEndian.Uint32(bs)
-	if int(bln) > is.opts.MaxLen {
+	if is.opts.MaxLen > 0 && int(bln) > is.opts.MaxLen {
 		return looperOut{err: fmt.Errorf("max length exceeded: %d > %d", bln, is.opts.MaxLen)}
 	}
 	bs = make([]byte, bln)
@@ -268,7 +268,7 @@ func (os *outStream) writeDiscrete() looperOut {
 			return looperOut{err: err}
 		}
 	}
-	if len(bs) > os.opts.MaxLen {
+	if os.opts.MaxLen > 0 && len(bs) > os.opts.MaxLen {
 		return looperOut{err: fmt.Errorf("max length exceeded: %d > %d", len(bs), os.opts.MaxLen)}
 	}
 	wbs := make([]byte, len(bs)+4)

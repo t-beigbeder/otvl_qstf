@@ -99,6 +99,7 @@ func (fc *function) GetOutStream(s string) OutStream {
 
 func (fc *function) activateStream(st *stream, sti Stream) {
 	fc.wg.Add(1)
+	st.ctrChan = make(chan ctrlMsg)
 	go func() {
 		defer fc.wg.Done()
 		st.loop(sti)
@@ -222,6 +223,8 @@ func NewFunction(ctx context.Context, sw StartWaiter, opts ...FcOption) (Functio
 		name: fopt.Name,
 		ctx:  ctx,
 		sw:   sw,
+		ins:  make(map[string]*inStream, 1),
+		outs: make(map[string]*outStream, 1),
 	}
 	return fc, nil
 }
