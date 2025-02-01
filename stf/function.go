@@ -46,6 +46,7 @@ type StartWaiter interface {
 }
 
 type function struct {
+	name  string
 	ctx   context.Context
 	sw    StartWaiter
 	mux   sync.Mutex
@@ -202,4 +203,25 @@ func (fc *function) State() FunctionState {
 
 func (fc *function) Error() error {
 	return fc.err
+}
+
+func NewFunction(ctx context.Context, sw StartWaiter, opts ...FcOption) (Function, error) {
+	var (
+		fopt FcOptions
+		err  error
+	)
+	for _, opt := range opts {
+		if iErr := opt(&fopt); iErr != nil {
+			err = errors.Join(err, iErr)
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	fc := &function{
+		name: fopt.Name,
+		ctx:  ctx,
+		sw:   sw,
+	}
+	return fc, nil
 }
