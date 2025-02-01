@@ -36,20 +36,19 @@ func newBufWr() io.Writer {
 	return &bufWr{buf: &buf, out: bufio.NewWriter(&buf)}
 }
 
-func fromJsonBytes(wr io.Writer) (any, error) {
+func fromJsonBytes(wr io.Writer, a any) error {
 	o, ok := wr.(*bufWr)
 	if !ok {
-		return nil, fmt.Errorf("expected bufWr got %T", wr)
+		return fmt.Errorf("expected bufWr got %T", wr)
 	}
 	obs := o.buf.Bytes()
 	bln := binary.BigEndian.Uint32(obs[0:4])
 	if bln != uint32(len(obs)-4) {
-		return nil, fmt.Errorf("invalid number of bytes read: expected %d got %d", len(obs)-4, bln)
+		return fmt.Errorf("invalid number of bytes read: expected %d got %d", len(obs)-4, bln)
 	}
-	var a any
 	err := json.Unmarshal(obs[4:], &a)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return a, nil
+	return nil
 }

@@ -3,17 +3,18 @@ package stf
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
 )
 
-func TestNewFuncWrapperBasic(t *testing.T) {
+func TestNewSyncFuncWrapperBasic(t *testing.T) {
 	wbs, err := toJsonBytes("value for test")
 	assert.NoError(t, err)
 	in := bytes.NewReader(wbs)
 	out := newBufWr()
-	fcw, err := NewFuncWrapper(context.Background(),
+	fcw, err := NewSyncFuncWrapper(context.Background(),
 		func(a any) any {
 			return "response for " + a.(string)
 		},
@@ -21,16 +22,17 @@ func TestNewFuncWrapperBasic(t *testing.T) {
 	assert.NoError(t, err)
 	err = fcw.Run()
 	assert.NoError(t, err)
-	a, err := fromJsonBytes(out)
+	var a string
+	err = fromJsonBytes(out, &a)
 	assert.Equal(t, "response for value for test", a)
 }
 
-func TestNewFuncWrapperSlow(t *testing.T) {
+func TestNewSyncFuncWrapperSlow(t *testing.T) {
 	wbs, err := toJsonBytes("value for test")
 	assert.NoError(t, err)
 	in := bytes.NewReader(wbs)
 	out := newBufWr()
-	fcw, err := NewFuncWrapper(context.Background(),
+	fcw, err := NewSyncFuncWrapper(context.Background(),
 		func(a any) any {
 			time.Sleep(time.Millisecond * 200)
 			return "response for " + a.(string)
@@ -39,6 +41,33 @@ func TestNewFuncWrapperSlow(t *testing.T) {
 	assert.NoError(t, err)
 	err = fcw.Run()
 	assert.NoError(t, err)
-	a, err := fromJsonBytes(out)
+	var a string
+	err = fromJsonBytes(out, &a)
 	assert.Equal(t, "response for value for test", a)
+}
+
+func TestNewSyncFuncWrapperLarge(t *testing.T) {
+	type dst struct {
+		Key   string `json:"key"`
+		Value string `json:"value"`
+	}
+	var din []dst
+	for i := 0; i < 10000; i++ {
+		din = append(din, dst{Key: fmt.Sprintf("k%03d", i), Value: fmt.Sprintf("v%03d", i)})
+	}
+	wbs, err := toJsonBytes(din)
+	assert.NoError(t, err)
+	in := bytes.NewReader(wbs)
+	out := newBufWr()
+	fcw, err := NewSyncFuncWrapper(context.Background(),
+		func(a any) any {
+			return a
+		},
+		in, out)
+	assert.NoError(t, err)
+	err = fcw.Run()
+	assert.NoError(t, err)
+	var a []dst
+	err = fromJsonBytes(out, &a)
+	assert.Equal(t, din, a)
 }

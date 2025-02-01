@@ -7,25 +7,25 @@ import (
 	"io"
 )
 
-type fwStType struct {
+type sfwStartWait struct {
 	is            InStream
 	wrappedCalled bool
 	wrappedResult any
 }
 
-func (sw *fwStType) Start() error {
+var _ StartWaiter = &sfwStartWait{}
+
+func (sw *sfwStartWait) Start() error {
 	sw.is.Start()
 	return nil
 }
 
-func (sw *fwStType) Wait() error {
+func (sw *sfwStartWait) Wait() error {
 	return nil
 }
 
-var _ StartWaiter = &fwStType{}
-
-func NewFuncWrapper(ctx context.Context, wrapped func(any) any, rr io.Reader, wr io.Writer, opts ...FcOption) (Function, error) {
-	sw := &fwStType{}
+func NewSyncFuncWrapper(ctx context.Context, wrapped func(any) any, rr io.Reader, wr io.Writer, opts ...FcOption) (Function, error) {
+	sw := &sfwStartWait{}
 	fc, err := NewFunction(ctx, sw, opts...)
 	if err != nil {
 		return nil, err
