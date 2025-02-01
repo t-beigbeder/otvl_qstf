@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/stretchr/testify/require"
-	"os"
 	"testing"
 	"time"
 )
@@ -41,12 +40,10 @@ func TestTerminable(t *testing.T) {
 	oss, err := fc.AddOutStream(out, OstDiscrete(true),
 		OstBGet(
 			func() ([]byte, error) {
-				fmt.Fprintf(os.Stderr, "OstBGet\n")
 				result, ok := <-sw.results
 				if !ok {
 					return nil, errors.New("OstBGet no more data")
 				}
-				fmt.Fprintf(os.Stderr, "OstBGet %s\n", result)
 				return []byte(result), nil
 			}))
 	require.NoError(t, err)
@@ -65,7 +62,6 @@ func TestTerminable(t *testing.T) {
 	is, err := fc.AddInStream(in, IstDiscrete(true),
 		IstBSet(
 			func(bs []byte) error {
-				fmt.Fprintf(os.Stderr, "IstBSet %s\n", string(bs))
 				sw.results <- string(bs)
 				time.Sleep(40 * time.Millisecond)
 				return nil
@@ -73,7 +69,6 @@ func TestTerminable(t *testing.T) {
 	require.NoError(t, err)
 	go func() {
 		time.Sleep(100 * time.Millisecond)
-		fmt.Fprintf(os.Stderr, "Terminate\n")
 		fc.Terminate()
 		close(sw.results)
 	}()
