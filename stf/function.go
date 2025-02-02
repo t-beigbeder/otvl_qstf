@@ -38,6 +38,7 @@ type Function interface {
 	Wait() error
 	Terminate()
 	State() FunctionState
+	Options() FcOptions
 	Error() error
 }
 
@@ -232,6 +233,10 @@ func (fc *function) Terminate() {
 
 func (fc *function) State() FunctionState {
 	return fc.state
+}
+
+func (fc *function) Options() FcOptions {
+	return FcOptions{Name: fc.name, Terminable: fc.terminable}
 }
 
 func (fc *function) Error() error {

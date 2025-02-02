@@ -30,6 +30,9 @@ func NewSyncFuncWrapper(ctx context.Context, wrapped func(any) any, rr io.Reader
 	if err != nil {
 		return nil, err
 	}
+	if fc.Options().Terminable {
+		return nil, errors.New("a sync function cannot be set terminable")
+	}
 	os, err := fc.AddOutStream(wr, OstDiscrete(true), OstMaxNb(1),
 		OstAGet(
 			func() (any, error) {

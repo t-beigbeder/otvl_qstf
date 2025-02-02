@@ -4,14 +4,14 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
 )
 
 func TestNewSyncFuncWrapperBasic(t *testing.T) {
 	wbs, err := toJsonBytes("value for test")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	in := bytes.NewReader(wbs)
 	out := newBufWr()
 	fcw, err := NewSyncFuncWrapper(context.Background(),
@@ -19,17 +19,17 @@ func TestNewSyncFuncWrapperBasic(t *testing.T) {
 			return "response for " + a.(string)
 		},
 		in, out)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	err = fcw.Run()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	var a string
 	err = fromJsonBytes(out, &a)
-	assert.Equal(t, "response for value for test", a)
+	require.Equal(t, "response for value for test", a)
 }
 
 func TestNewSyncFuncWrapperSlow(t *testing.T) {
 	wbs, err := toJsonBytes("value for test")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	in := bytes.NewReader(wbs)
 	out := newBufWr()
 	fcw, err := NewSyncFuncWrapper(context.Background(),
@@ -38,12 +38,12 @@ func TestNewSyncFuncWrapperSlow(t *testing.T) {
 			return "response for " + a.(string)
 		},
 		in, out)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	err = fcw.Run()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	var a string
 	err = fromJsonBytes(out, &a)
-	assert.Equal(t, "response for value for test", a)
+	require.Equal(t, "response for value for test", a)
 }
 
 func TestNewSyncFuncWrapperLarge(t *testing.T) {
@@ -56,7 +56,7 @@ func TestNewSyncFuncWrapperLarge(t *testing.T) {
 		din = append(din, dst{Key: fmt.Sprintf("k%03d", i), Value: fmt.Sprintf("v%03d", i)})
 	}
 	wbs, err := toJsonBytes(din)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	in := bytes.NewReader(wbs)
 	out := newBufWr()
 	fcw, err := NewSyncFuncWrapper(context.Background(),
@@ -64,10 +64,10 @@ func TestNewSyncFuncWrapperLarge(t *testing.T) {
 			return a
 		},
 		in, out)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	err = fcw.Run()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	var a []dst
 	err = fromJsonBytes(out, &a)
-	assert.Equal(t, din, a)
+	require.Equal(t, din, a)
 }

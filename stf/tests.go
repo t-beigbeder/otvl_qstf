@@ -36,6 +36,14 @@ func newBufWr() io.Writer {
 	return &bufWr{buf: &buf, out: bufio.NewWriter(&buf)}
 }
 
+func fromBufWr(wr io.Writer) ([]byte, error) {
+	b, ok := wr.(*bufWr)
+	if !ok {
+		return nil, fmt.Errorf("expected bufWr got %T", wr)
+	}
+	return b.buf.Bytes(), nil
+}
+
 func fromJsonBytes(wr io.Writer, a any) error {
 	o, ok := wr.(*bufWr)
 	if !ok {
