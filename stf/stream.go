@@ -50,11 +50,13 @@ type Stream interface {
 type InStream interface {
 	Stream
 	io.Reader
+	Options() IstOptions
 }
 
 type OutStream interface {
 	Stream
 	io.Writer
+	Options() OstOptions
 }
 
 type ctrlMsg int
@@ -139,6 +141,10 @@ type inStream struct {
 }
 
 var _ InStream = &inStream{}
+
+func (is *inStream) Options() IstOptions {
+	return is.opts
+}
 
 func (is *inStream) readRaw() looperOut {
 	bSize := 128
@@ -232,6 +238,10 @@ type outStream struct {
 }
 
 var _ OutStream = &outStream{}
+
+func (os *outStream) Options() OstOptions {
+	return os.opts
+}
 
 func (os *outStream) writeRaw() looperOut {
 	if os.opts.BGet == nil {

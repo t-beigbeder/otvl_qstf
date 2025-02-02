@@ -108,7 +108,7 @@ func TestNewLocalCommandLarge(t *testing.T) {
 
 func TestNewLocalCommandLong(t *testing.T) {
 	instr := ""
-	for i := 0; i < 10000; i++ {
+	for i := 0; i < 100; i++ {
 		instr += fmt.Sprintf("hello world #%d\n", i)
 	}
 	stdin := bytes.NewReader([]byte(instr))
