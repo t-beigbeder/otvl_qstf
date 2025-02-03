@@ -23,7 +23,9 @@ func GetQuicListener(addr string, cert *tls.Certificate, alpn string, logger *sl
 		Certificates: []tls.Certificate{*cert},
 		NextProtos:   []string{alpn},
 		GetConfigForClient: func(info *tls.ClientHelloInfo) (*tls.Config, error) {
-			logger.Info("connection", "ServerName", info.ServerName, "SupportedProtos", info.SupportedProtos)
+			if logger != nil {
+				logger.Info("connection", "ServerName", info.ServerName, "SupportedProtos", info.SupportedProtos)
+			}
 			return nil, nil
 		},
 	}
