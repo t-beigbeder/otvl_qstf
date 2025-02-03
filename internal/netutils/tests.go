@@ -32,7 +32,7 @@ func RunTestServer(alpn string, doer func(ctx context.Context, connection quic.C
 				fmt.Fprintf(os.Stderr, "RunTestServer: error accepting connection: %s\n", ierr)
 				return
 			}
-			fmt.Fprintf(os.Stderr, "RunTestServer: new connection: %v\n", cnc)
+			fmt.Fprintf(os.Stderr, "RunTestServer: new connection: %s\n", cnc.LocalAddr().String())
 			doer(ctx, cnc)
 		}
 	}()

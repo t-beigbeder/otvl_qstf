@@ -11,8 +11,8 @@ import (
 )
 
 func TestGetQuicConn(t *testing.T) {
-	port, cancel, err := RunTestServer("TestGetQuicConn", func(ctx context.Context, connection quic.Connection) {
-		fmt.Fprintf(os.Stderr, "TestGetQuicConn: %v\n", connection)
+	port, cancel, err := RunTestServer("TestGetQuicConn", func(ctx context.Context, cn quic.Connection) {
+		fmt.Fprintf(os.Stderr, "TestGetQuicConn: %s\n", cn.LocalAddr().String())
 	})
 	require.NoError(t, err)
 	defer cancel()
@@ -21,4 +21,5 @@ func TestGetQuicConn(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 	err = cnc.CloseWithError(0, "no issue")
 	require.NoError(t, err)
+	time.Sleep(100 * time.Millisecond)
 }
