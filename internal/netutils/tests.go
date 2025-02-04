@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-func RunTestServer(alpn string, doer func(ctx context.Context, connection quic.Connection)) (string, context.CancelFunc, error) {
+func RunTestServer(alpn string, doer func(ctx context.Context, connection quic.Connection, logger *slog.Logger)) (string, context.CancelFunc, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cert, err := SelfSigned("localhost")
 	if err != nil {
@@ -33,7 +33,7 @@ func RunTestServer(alpn string, doer func(ctx context.Context, connection quic.C
 				return
 			}
 			fmt.Fprintf(os.Stderr, "RunTestServer: new connection: %s\n", cnc.LocalAddr().String())
-			doer(ctx, cnc)
+			doer(ctx, cnc, logger)
 		}
 	}()
 	time.Sleep(100 * time.Millisecond)

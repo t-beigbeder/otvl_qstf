@@ -5,13 +5,14 @@ import (
 	"fmt"
 	"github.com/quic-go/quic-go"
 	"github.com/stretchr/testify/require"
+	"log/slog"
 	"os"
 	"testing"
 	"time"
 )
 
 func TestGetQuicConn(t *testing.T) {
-	port, cancel, err := RunTestServer("TestGetQuicConn", func(ctx context.Context, cn quic.Connection) {
+	port, cancel, err := RunTestServer("TestGetQuicConn", func(ctx context.Context, cn quic.Connection, _ *slog.Logger) {
 		fmt.Fprintf(os.Stderr, "TestGetQuicConn: %s\n", cn.LocalAddr().String())
 	})
 	require.NoError(t, err)
