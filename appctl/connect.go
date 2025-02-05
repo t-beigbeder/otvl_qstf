@@ -21,18 +21,24 @@ type Connection interface {
 	GetCtrlStream() quic.Stream
 	AddCtrlRead(int)
 	AddCtrlWritten(int)
+	SetSyncStream() error
+	GetSyncStream() quic.Stream
+	AddSyncRead(int)
+	AddSyncWritten(int)
 	//Connect() (AppClient, error)
 }
 
 type connection struct {
-	ctx           context.Context
-	qc            quic.Connection
-	id            string
-	isQuicServer  bool
-	isAppServer   bool
-	ctlStream     quic.Stream
-	read, written int
-	logger        *slog.Logger
+	ctx                   context.Context
+	qc                    quic.Connection
+	id                    string
+	isQuicServer          bool
+	isAppServer           bool
+	ctlStream             quic.Stream
+	ctlRead, ctlWritten   int
+	syncStream            quic.Stream
+	syncRead, syncWritten int
+	logger                *slog.Logger
 }
 
 var _ Connection = &connection{}
@@ -52,30 +58,46 @@ func (c *connection) GetQuicConnection() quic.Connection {
 func (c *connection) GetLogger() *slog.Logger {
 	return c.logger
 }
-
-func (c *connection) SetCtrlStream() error {
-	var err error
+func (c *connection) setIoStream(isSync bool) (iost quic.Stream, err error) {
+	stn := "control"
+	if isSync {
+		stn = "sync"
+	}
 	if c.isAppServer && c.isQuicServer {
-		if c.ctlStream, err = c.qc.AcceptStream(c.ctx); err != nil {
-			return fmt.Errorf("error accepting control stream: %v", err)
+		if iost, err = c.qc.AcceptStream(c.ctx); err != nil {
+			err = fmt.Errorf("error accepting %s stream: %v", stn, err)
+			return
 		}
-		_, err = io.ReadFull(c.ctlStream, make([]byte, 4))
+		_, err = io.ReadFull(iost, make([]byte, 4))
 		if err != nil {
-			return fmt.Errorf("error reading control stream: %v", err)
+			err = fmt.Errorf("error reading %s stream: %v", stn, err)
+			return
 		}
-		c.GetLogger().Info("Control stream accepted")
+		if !isSync {
+			c.GetLogger().Info("Control stream accepted")
+		} else {
+			c.GetLogger().Info("Sync stream accepted")
+		}
 	} else if !c.isAppServer && !c.isQuicServer {
-		if c.ctlStream, err = c.qc.OpenStream(); err != nil {
-			return fmt.Errorf("error opening control stream: %v", err)
+		if iost, err = c.qc.OpenStream(); err != nil {
+			err = fmt.Errorf("error opening %s stream: %v", stn, err)
+			return
 		}
-		_, err = c.ctlStream.Write(make([]byte, 4))
+		_, err = iost.Write(make([]byte, 4))
 		if err != nil {
-			return fmt.Errorf("error writing control stream: %v", err)
+			err = fmt.Errorf("error writing %s stream: %v", stn, err)
+			return
 		}
 	} else {
-		return fmt.Errorf("not yet implemented: %v", *c)
+		err = fmt.Errorf("not yet implemented: %v", *c)
+		return
 	}
-	return nil
+	return iost, nil
+}
+
+func (c *connection) SetCtrlStream() (err error) {
+	c.ctlStream, err = c.setIoStream(false)
+	return
 }
 
 func (c *connection) GetCtrlStream() quic.Stream {
@@ -83,9 +105,26 @@ func (c *connection) GetCtrlStream() quic.Stream {
 }
 
 func (c *connection) AddCtrlRead(i int) {
-	c.read += i
+	c.ctlRead += i
 }
 
 func (c *connection) AddCtrlWritten(i int) {
-	c.written += i
+	c.ctlWritten += i
+}
+
+func (c *connection) SetSyncStream() (err error) {
+	c.syncStream, err = c.setIoStream(true)
+	return
+}
+
+func (c *connection) GetSyncStream() quic.Stream {
+	return c.syncStream
+}
+
+func (c *connection) AddSyncRead(i int) {
+	c.syncRead += i
+}
+
+func (c *connection) AddSyncWritten(i int) {
+	c.syncWritten += i
 }

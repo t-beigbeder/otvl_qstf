@@ -19,6 +19,8 @@ type AppServerCnc interface {
 	AddIStream(id string) (IStream, error)
 	GetOStream(id string) (OStream, error)
 	GetFunction(id string, iss []IStream, oss []OStream) (FcServer, error)
+	RunFunction(funcId string) error
+	GetLogger() *slog.Logger
 }
 
 type appServerCnc struct {
@@ -44,16 +46,21 @@ func (ac *appServerCnc) Handle() error {
 	if err := json.Unmarshal(bs, &crqm); err != nil {
 		return err
 	}
+	ac.GetLogger().Info("Received request", "req", crqm)
 	switch crqm.Command {
 	case CmdRunFunction:
-		return nil
+		return ac.RunFunction(crqm.FunctionId)
 	default:
 		return fmt.Errorf("unknown command: %s", crqm.Command)
 	}
 }
 
 func (ac *appServerCnc) Close(err error) error {
-	return ac.cnc.GetQuicConnection().CloseWithError(0, err.Error())
+	sErr := ""
+	if err != nil {
+		sErr = err.Error()
+	}
+	return ac.cnc.GetQuicConnection().CloseWithError(0, sErr)
 }
 
 func (ac *appServerCnc) AddIStream(id string) (IStream, error) {
@@ -69,6 +76,59 @@ func (ac *appServerCnc) GetOStream(id string) (OStream, error) {
 func (ac *appServerCnc) GetFunction(id string, iss []IStream, oss []OStream) (FcServer, error) {
 	//TODO implement me
 	panic("implement me")
+}
+
+func (ac *appServerCnc) sendRsp(err error) error {
+	sErr := ""
+	if err != nil {
+		sErr = err.Error()
+	}
+	crsm := CtrlRspMsg{Error: sErr}
+	bs, err := json.Marshal(crsm)
+	if err != nil {
+		return err
+	}
+	wbs := make([]byte, len(bs)+4)
+	binary.BigEndian.PutUint32(wbs, uint32(len(bs)))
+	copy(wbs[4:], bs)
+	stream := ac.cnc.GetCtrlStream()
+	if _, err = stream.Write(wbs); err != nil {
+		return err
+	}
+	ac.cnc.AddCtrlWritten(len(wbs))
+	return nil
+}
+
+func (ac *appServerCnc) RunFunction(funcId string) error {
+	var (
+		err error
+		fw  stf.Function
+	)
+	defer func() {
+		if iErr := ac.sendRsp(err); iErr != nil {
+			err = iErr
+		}
+	}()
+	_ = fw
+	//fw, err = stf.NewSyncFuncWrapper(
+	//	ac.cnc.GetCtx(),
+	//	func(a any) any {
+	//		return fmt.Sprintf("RunFunction: %s", funcId)
+	//	},
+	//	,
+	//	ac.cnc.GetCtrlStream(),
+	//)
+	//if err != nil {
+	//	return err
+	//}
+	//if err = fw.Run(); err != nil {
+	//	return err
+	//}
+	return nil
+}
+
+func (ac *appServerCnc) GetLogger() *slog.Logger {
+	return ac.cnc.GetLogger()
 }
 
 var _ AppServerCnc = &appServerCnc{}
@@ -100,6 +160,11 @@ func (as *appServer) NewCnc(qc quic.Connection) {
 		logger:       as.logger,
 	}
 	if err := cnc.SetCtrlStream(); err != nil {
+		cnc.GetLogger().Error("AppServerConnectionHandler", "err", err)
+		cnc.qc.CloseWithError(0, err.Error())
+		return
+	}
+	if err := cnc.SetSyncStream(); err != nil {
 		cnc.GetLogger().Error("AppServerConnectionHandler", "err", err)
 		cnc.qc.CloseWithError(0, err.Error())
 		return

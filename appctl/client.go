@@ -161,5 +161,8 @@ func NewAppClient(ctx context.Context, sAddr string) (AppClient, error) {
 	if err := cnc.SetCtrlStream(); err != nil {
 		return nil, err
 	}
+	if err := cnc.SetSyncStream(); err != nil {
+		return nil, err
+	}
 	return &appClient{cnc: &cnc}, nil
 }
