@@ -48,7 +48,7 @@ func (ac *appServerCnc) Handle() error {
 	}
 	ac.GetLogger().Info("Received request", "req", crqm)
 	switch crqm.Command {
-	case CmdRunFunction:
+	case CmdRunSyncFunction:
 		return ac.RunFunction(crqm.FunctionId)
 	default:
 		return fmt.Errorf("unknown command: %s", crqm.Command)
@@ -110,20 +110,20 @@ func (ac *appServerCnc) RunFunction(funcId string) error {
 		}
 	}()
 	_ = fw
-	//fw, err = stf.NewSyncFuncWrapper(
-	//	ac.cnc.GetCtx(),
-	//	func(a any) any {
-	//		return fmt.Sprintf("RunFunction: %s", funcId)
-	//	},
-	//	,
-	//	ac.cnc.GetCtrlStream(),
-	//)
-	//if err != nil {
-	//	return err
-	//}
-	//if err = fw.Run(); err != nil {
-	//	return err
-	//}
+	fw, err = stf.NewSyncFuncWrapper(
+		ac.cnc.GetCtx(),
+		func(in any) any {
+			return fmt.Sprintf("RunSyncFunction: %s(%s)", funcId, in)
+		},
+		ac.cnc.GetSyncStream(),
+		ac.cnc.GetSyncStream(),
+	)
+	if err != nil {
+		return err
+	}
+	if err = fw.Run(); err != nil {
+		return err
+	}
 	return nil
 }
 

@@ -14,9 +14,9 @@ func TestNewAppClientBasic(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, ac)
 	time.Sleep(100 * time.Millisecond)
-	fc, err := ac.RunFunction("Go", nil, nil)
+	var sOut string
+	err = ac.RunSyncFunction("Go", "TestNewAppClientBasic", &sOut)
 	require.NoError(t, err)
-	require.NotNil(t, fc)
 	cancel()
 	time.Sleep(100 * time.Millisecond)
 }

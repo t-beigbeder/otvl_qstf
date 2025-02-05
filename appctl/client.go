@@ -16,7 +16,7 @@ import (
 type AppClient interface {
 	AddIStream(id string) (OStream, error)
 	GetOStream(id string) (IStream, error)
-	RunFunction(id string, iss []OStream, oss []IStream) (FcClient, error)
+	RunSyncFunction(id string, in any, out any) error
 	GetFunction(id string, iss []OStream, oss []IStream) (FcClient, error)
 }
 
@@ -78,7 +78,7 @@ type appClient struct {
 
 var _ AppClient = &appClient{}
 
-func (ac *appClient) reqRoundTrip(cmd string, funcId string) error {
+func (ac *appClient) reqRoundTrip(cmd string, funcId string, subProcess func(*appClient) error) error {
 	ac.ctlMux.Lock()
 	defer ac.ctlMux.Unlock()
 	crqm := CtrlReqMsg{Command: cmd, FunctionId: funcId}
@@ -94,6 +94,12 @@ func (ac *appClient) reqRoundTrip(cmd string, funcId string) error {
 		return err
 	}
 	ac.cnc.AddCtrlWritten(len(wbs))
+
+	if subProcess != nil {
+		if err := subProcess(ac); err != nil {
+			return err
+		}
+	}
 
 	bs = make([]byte, 4)
 	if _, err = io.ReadFull(stream, bs); err != nil {
@@ -126,12 +132,41 @@ func (ac *appClient) GetOStream(id string) (IStream, error) {
 	panic("implement me")
 }
 
-func (ac *appClient) RunFunction(funcId string, iss []OStream, oss []IStream) (FcClient, error) {
-	err := ac.reqRoundTrip(CmdRunFunction, funcId)
-	if err != nil {
-		return nil, err
-	}
-	return &fcClient{id: funcId}, nil
+func (ac *appClient) RunSyncFunction(funcId string, in any, out any) error {
+	err := ac.reqRoundTrip(
+		CmdRunSyncFunction,
+		funcId,
+		func(client *appClient) error {
+			bs, err := json.Marshal(in)
+			if err != nil {
+				return err
+			}
+			wbs := make([]byte, len(bs)+4)
+			binary.BigEndian.PutUint32(wbs, uint32(len(bs)))
+			copy(wbs[4:], bs)
+			stream := ac.cnc.GetSyncStream()
+			if _, err = stream.Write(wbs); err != nil {
+				return err
+			}
+			ac.cnc.AddSyncWritten(len(wbs))
+
+			bs = make([]byte, 4)
+			if _, err = io.ReadFull(stream, bs); err != nil {
+				return err
+			}
+			bln := binary.BigEndian.Uint32(bs)
+			if bln > MaxRspSize { // FIXME: depend on funcId
+				return fmt.Errorf("response too large (%d > %d)", bln, MaxRspSize)
+			}
+			bs = make([]byte, bln)
+			_, err = io.ReadFull(stream, bs)
+			ac.cnc.AddSyncRead(int(bln + 4))
+			if err := json.Unmarshal(bs, out); err != nil {
+				return err
+			}
+			return nil
+		})
+	return err
 }
 
 func (ac *appClient) GetFunction(id string, iss []OStream, oss []IStream) (FcClient, error) {

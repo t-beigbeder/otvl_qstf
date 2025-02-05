@@ -1,11 +1,11 @@
 package appctl
 
 const (
-	CmdAddIStream  = "AddIStream"
-	CmdAddOStream  = "AddOStream"
-	CmdRunFunction = "RunFunction"
-	MaxReqSize     = 256
-	MaxRspSize     = 256
+	CmdAddIStream      = "AddIStream"
+	CmdAddOStream      = "AddOStream"
+	CmdRunSyncFunction = "RunSyncFunction"
+	MaxReqSize         = 256
+	MaxRspSize         = 256
 )
 
 type CtrlReqMsg struct {
