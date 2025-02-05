@@ -18,6 +18,7 @@ type AppClient interface {
 	AddIStream(id string) (OStream, error)
 	GetOStream(id string) (IStream, error)
 	RunSyncFunction(id string, in any, out any) error
+	//RunRemoteCommand(cs stf.CommandSpec) error
 	GetFunction(id string, iss []OStream, oss []IStream) (FcClient, error)
 }
 

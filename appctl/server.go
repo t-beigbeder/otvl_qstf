@@ -34,8 +34,8 @@ func (ac *appServerCnc) Handle() error {
 		return err
 	}
 	bln := binary.BigEndian.Uint32(bs)
-	if bln > MaxRspSize {
-		return fmt.Errorf("response too large (%d > %d)", bln, MaxRspSize)
+	if bln > MaxReqSize {
+		return fmt.Errorf("request too large (%d > %d)", bln, MaxReqSize)
 	}
 	bs = make([]byte, bln)
 	if _, err := io.ReadFull(stream, bs); err != nil {

@@ -8,10 +8,10 @@ import (
 )
 
 type CommandSpec struct {
-	Cmd  string
-	Args []string
-	Env  []string
-	Dir  string
+	Cmd  string   `json:"cmd,omitempty"`
+	Args []string `json:"args,omitempty"`
+	Env  []string `json:"env,omitempty"`
+	Dir  string   `json:"dir,omitempty"`
 }
 
 type lcStartWait struct {
