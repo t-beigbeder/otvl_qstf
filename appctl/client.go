@@ -10,6 +10,7 @@ import (
 	"github.com/t-beigbeder/otvl_qstf/internal/netutils"
 	"github.com/t-beigbeder/otvl_qstf/stf"
 	"io"
+	"log/slog"
 	"sync"
 )
 
@@ -93,7 +94,6 @@ func (ac *appClient) reqRoundTrip(cmd string, funcId string, subProcess func(*ap
 	if _, err = stream.Write(wbs); err != nil {
 		return err
 	}
-	ac.cnc.AddCtrlWritten(len(wbs))
 
 	if subProcess != nil {
 		if err := subProcess(ac); err != nil {
@@ -111,7 +111,6 @@ func (ac *appClient) reqRoundTrip(cmd string, funcId string, subProcess func(*ap
 	}
 	bs = make([]byte, bln)
 	_, err = io.ReadFull(stream, bs)
-	ac.cnc.AddCtrlRead(int(bln + 4))
 	crsm := CtrlRspMsg{}
 	if err := json.Unmarshal(bs, &crsm); err != nil {
 		return err
@@ -148,7 +147,6 @@ func (ac *appClient) RunSyncFunction(funcId string, in any, out any) error {
 			if _, err = stream.Write(wbs); err != nil {
 				return err
 			}
-			ac.cnc.AddSyncWritten(len(wbs))
 
 			bs = make([]byte, 4)
 			if _, err = io.ReadFull(stream, bs); err != nil {
@@ -160,7 +158,6 @@ func (ac *appClient) RunSyncFunction(funcId string, in any, out any) error {
 			}
 			bs = make([]byte, bln)
 			_, err = io.ReadFull(stream, bs)
-			ac.cnc.AddSyncRead(int(bln + 4))
 			if err := json.Unmarshal(bs, out); err != nil {
 				return err
 			}
@@ -174,7 +171,7 @@ func (ac *appClient) GetFunction(id string, iss []OStream, oss []IStream) (FcCli
 	panic("implement me")
 }
 
-func NewAppClient(ctx context.Context, sAddr string) (AppClient, error) {
+func NewAppClient(ctx context.Context, sAddr string, logger *slog.Logger) (AppClient, error) {
 	var (
 		qc  quic.Connection
 		err error
@@ -189,9 +186,10 @@ func NewAppClient(ctx context.Context, sAddr string) (AppClient, error) {
 		}
 	}()
 	cnc := connection{
-		ctx: ctx,
-		qc:  qc,
-		id:  "client",
+		ctx:    ctx,
+		qc:     qc,
+		id:     "client",
+		logger: logger,
 	}
 	if err := cnc.SetCtrlStream(); err != nil {
 		return nil, err

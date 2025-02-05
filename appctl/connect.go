@@ -6,6 +6,7 @@ import (
 	"github.com/quic-go/quic-go"
 	"io"
 	"log/slog"
+	"strconv"
 )
 
 const (
@@ -18,27 +19,20 @@ type Connection interface {
 	GetQuicConnection() quic.Connection
 	GetLogger() *slog.Logger
 	SetCtrlStream() error
-	GetCtrlStream() quic.Stream
-	AddCtrlRead(int)
-	AddCtrlWritten(int)
+	GetCtrlStream() IOStream
 	SetSyncStream() error
-	GetSyncStream() quic.Stream
-	AddSyncRead(int)
-	AddSyncWritten(int)
-	//Connect() (AppClient, error)
+	GetSyncStream() IOStream
 }
 
 type connection struct {
-	ctx                   context.Context
-	qc                    quic.Connection
-	id                    string
-	isQuicServer          bool
-	isAppServer           bool
-	ctlStream             quic.Stream
-	ctlRead, ctlWritten   int
-	syncStream            quic.Stream
-	syncRead, syncWritten int
-	logger                *slog.Logger
+	ctx          context.Context
+	qc           quic.Connection
+	id           string
+	isQuicServer bool
+	isAppServer  bool
+	ctlStream    IOStream
+	syncStream   IOStream
+	logger       *slog.Logger
 }
 
 var _ Connection = &connection{}
@@ -58,73 +52,73 @@ func (c *connection) GetQuicConnection() quic.Connection {
 func (c *connection) GetLogger() *slog.Logger {
 	return c.logger
 }
-func (c *connection) setIoStream(isSync bool) (iost quic.Stream, err error) {
-	stn := "control"
-	if isSync {
-		stn = "sync"
-	}
+
+func (c *connection) makeQStream(id string, isIn bool) (qst quic.Stream, read int, written int, err error) {
+	var (
+		accept bool
+	)
 	if c.isAppServer && c.isQuicServer {
-		if iost, err = c.qc.AcceptStream(c.ctx); err != nil {
-			err = fmt.Errorf("error accepting %s stream: %v", stn, err)
-			return
-		}
-		_, err = io.ReadFull(iost, make([]byte, 4))
-		if err != nil {
-			err = fmt.Errorf("error reading %s stream: %v", stn, err)
-			return
-		}
-		if !isSync {
-			c.GetLogger().Info("Control stream accepted")
-		} else {
-			c.GetLogger().Info("Sync stream accepted")
-		}
+		accept = isIn
 	} else if !c.isAppServer && !c.isQuicServer {
-		if iost, err = c.qc.OpenStream(); err != nil {
-			err = fmt.Errorf("error opening %s stream: %v", stn, err)
-			return
-		}
-		_, err = iost.Write(make([]byte, 4))
-		if err != nil {
-			err = fmt.Errorf("error writing %s stream: %v", stn, err)
-			return
-		}
+		accept = isIn
 	} else {
-		err = fmt.Errorf("not yet implemented: %v", *c)
+		err = fmt.Errorf(
+			"not yet implemented: as %s qs %s in %s",
+			strconv.FormatBool(c.isAppServer),
+			strconv.FormatBool(c.isQuicServer),
+			strconv.FormatBool(isIn))
 		return
 	}
-	return iost, nil
-}
-
-func (c *connection) SetCtrlStream() (err error) {
-	c.ctlStream, err = c.setIoStream(false)
+	if accept {
+		if qst, err = c.qc.AcceptStream(c.ctx); err != nil {
+			err = fmt.Errorf("error accepting %s stream: %v", id, err)
+			return
+		}
+		_, err = io.ReadFull(qst, make([]byte, 4))
+		if err != nil {
+			err = fmt.Errorf("error reading %s stream: %v", id, err)
+			return
+		}
+		c.GetLogger().Info("stream accepted", "id", id)
+		read = 4
+	} else {
+		if qst, err = c.qc.OpenStream(); err != nil {
+			err = fmt.Errorf("error opening %s stream: %v", id, err)
+			return
+		}
+		_, err = qst.Write(make([]byte, 4))
+		if err != nil {
+			err = fmt.Errorf("error writing %s stream: %v", id, err)
+			return
+		}
+		c.GetLogger().Info("stream opened", "id", id)
+		written = 4
+	}
 	return
 }
 
-func (c *connection) GetCtrlStream() quic.Stream {
+func (c *connection) SetCtrlStream() error {
+	qst, read, written, err := c.makeQStream("control", c.isAppServer)
+	if err != nil {
+		return err
+	}
+	c.ctlStream = NewIOStream("control", qst, read, written)
+	return nil
+}
+
+func (c *connection) GetCtrlStream() IOStream {
 	return c.ctlStream
 }
 
-func (c *connection) AddCtrlRead(i int) {
-	c.ctlRead += i
-}
-
-func (c *connection) AddCtrlWritten(i int) {
-	c.ctlWritten += i
-}
-
 func (c *connection) SetSyncStream() (err error) {
-	c.syncStream, err = c.setIoStream(true)
-	return
+	qst, read, written, err := c.makeQStream("sync", c.isAppServer)
+	if err != nil {
+		return err
+	}
+	c.syncStream = NewIOStream("sync", qst, read, written)
+	return nil
 }
 
-func (c *connection) GetSyncStream() quic.Stream {
+func (c *connection) GetSyncStream() IOStream {
 	return c.syncStream
-}
-
-func (c *connection) AddSyncRead(i int) {
-	c.syncRead += i
-}
-
-func (c *connection) AddSyncWritten(i int) {
-	c.syncWritten += i
 }

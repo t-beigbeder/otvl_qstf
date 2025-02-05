@@ -14,7 +14,7 @@ import (
 func TestGetQuicConn(t *testing.T) {
 	port, cancel, err := RunTestServer("TestGetQuicConn", func(ctx context.Context, cn quic.Connection, _ *slog.Logger) {
 		fmt.Fprintf(os.Stderr, "TestGetQuicConn: %s\n", cn.LocalAddr().String())
-	})
+	}, GetLoggerFor("server"))
 	require.NoError(t, err)
 	defer cancel()
 	cnc, err := GetQuicConn("localhost:"+port, "TestGetQuicConn")

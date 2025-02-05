@@ -9,7 +9,10 @@ import (
 	"time"
 )
 
-func RunTestServer(alpn string, doer func(ctx context.Context, connection quic.Connection, logger *slog.Logger)) (string, context.CancelFunc, error) {
+func RunTestServer(alpn string,
+	doer func(ctx context.Context, connection quic.Connection, logger *slog.Logger),
+	logger *slog.Logger,
+) (string, context.CancelFunc, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cert, err := SelfSigned("localhost")
 	if err != nil {
@@ -18,7 +21,7 @@ func RunTestServer(alpn string, doer func(ctx context.Context, connection quic.C
 	}
 	var port string
 	go func() {
-		logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
+		logger := logger
 		listener, host, iport, ierr := GetQuicListener(":0", cert, alpn, logger)
 		fmt.Fprintf(os.Stderr, "RunTestServer: listening on %s:%s\n", host, iport)
 		if ierr != nil {
@@ -42,4 +45,12 @@ func RunTestServer(alpn string, doer func(ctx context.Context, connection quic.C
 		return "", nil, err
 	}
 	return port, cancel, nil
+}
+
+func GetLogger() *slog.Logger {
+	return slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
+}
+
+func GetLoggerFor(app string) *slog.Logger {
+	return GetLogger().With("app", app)
 }

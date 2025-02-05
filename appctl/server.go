@@ -41,7 +41,6 @@ func (ac *appServerCnc) Handle() error {
 	if _, err := io.ReadFull(stream, bs); err != nil {
 		return err
 	}
-	ac.cnc.AddCtrlRead(int(bln + 4))
 	crqm := CtrlReqMsg{}
 	if err := json.Unmarshal(bs, &crqm); err != nil {
 		return err
@@ -95,7 +94,6 @@ func (ac *appServerCnc) sendRsp(err error) error {
 	if _, err = stream.Write(wbs); err != nil {
 		return err
 	}
-	ac.cnc.AddCtrlWritten(len(wbs))
 	return nil
 }
 
