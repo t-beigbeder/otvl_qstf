@@ -10,6 +10,7 @@ import (
 	"github.com/t-beigbeder/otvl_qstf/internal/netutils"
 	"github.com/t-beigbeder/otvl_qstf/stf"
 	"io"
+	"sync"
 )
 
 type AppClient interface {
@@ -71,12 +72,15 @@ func (fc *fcClient) Error() error {
 var _ FcClient = &fcClient{}
 
 type appClient struct {
-	cnc Connection
+	cnc    Connection
+	ctlMux sync.Mutex
 }
 
 var _ AppClient = &appClient{}
 
-func (ac *appClient) req(cmd string, funcId string) error {
+func (ac *appClient) reqRoundTrip(cmd string, funcId string) error {
+	ac.ctlMux.Lock()
+	defer ac.ctlMux.Unlock()
 	crqm := CtrlReqMsg{Command: cmd, FunctionId: funcId}
 	bs, err := json.Marshal(crqm)
 	if err != nil {
@@ -123,7 +127,7 @@ func (ac *appClient) GetOStream(id string) (IStream, error) {
 }
 
 func (ac *appClient) RunFunction(funcId string, iss []OStream, oss []IStream) (FcClient, error) {
-	err := ac.req(CmdRunFunction, funcId)
+	err := ac.reqRoundTrip(CmdRunFunction, funcId)
 	if err != nil {
 		return nil, err
 	}

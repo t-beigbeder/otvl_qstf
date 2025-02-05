@@ -31,8 +31,8 @@ type connection struct {
 	isQuicServer  bool
 	isAppServer   bool
 	ctlStream     quic.Stream
-	logger        *slog.Logger
 	read, written int
+	logger        *slog.Logger
 }
 
 var _ Connection = &connection{}

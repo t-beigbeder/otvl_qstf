@@ -3,13 +3,12 @@ package appctl
 import (
 	"context"
 	"github.com/stretchr/testify/require"
-	"github.com/t-beigbeder/otvl_qstf/internal/netutils"
 	"testing"
 	"time"
 )
 
 func TestNewAppClientBasic(t *testing.T) {
-	port, cancel, err := netutils.RunTestServer(QstfAlpn, quicAppServerConnectionHandler)
+	port, cancel, err := RunTestServer()
 	require.NoError(t, err)
 	ac, err := NewAppClient(context.Background(), "localhost:"+port)
 	require.NoError(t, err)
