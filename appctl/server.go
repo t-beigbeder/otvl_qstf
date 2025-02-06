@@ -16,8 +16,8 @@ import (
 type AppServerCnc interface {
 	Handle() error
 	Close(error) error
-	AddIStream(id string) (IStream, error)
-	GetOStream(id string) (OStream, error)
+	AddIStream(id string) error
+	GetOStream(id string) error
 	GetFunction(id string, iss []IStream, oss []OStream) (FcServer, error)
 	RunFunction(funcId string) error
 	GetLogger() *slog.Logger
@@ -47,6 +47,10 @@ func (ac *appServerCnc) Handle() error {
 	}
 	ac.GetLogger().Info("Received request", "req", crqm)
 	switch crqm.Command {
+	case CmdAddIStream:
+		return ac.AddIStream(crqm.StreamId)
+	case CmdAddOStream:
+		return ac.GetOStream(crqm.StreamId)
 	case CmdRunSyncFunction:
 		return ac.RunFunction(crqm.FunctionId)
 	default:
@@ -60,21 +64,6 @@ func (ac *appServerCnc) Close(err error) error {
 		sErr = err.Error()
 	}
 	return ac.cnc.GetQuicConnection().CloseWithError(0, sErr)
-}
-
-func (ac *appServerCnc) AddIStream(id string) (IStream, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (ac *appServerCnc) GetOStream(id string) (OStream, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (ac *appServerCnc) GetFunction(id string, iss []IStream, oss []OStream) (FcServer, error) {
-	//TODO implement me
-	panic("implement me")
 }
 
 func (ac *appServerCnc) sendRsp(err error) error {
@@ -97,32 +86,52 @@ func (ac *appServerCnc) sendRsp(err error) error {
 	return nil
 }
 
+func (ac *appServerCnc) runAndResp(toRun func(ac *appServerCnc) error) error {
+	err := toRun(ac)
+	eErr := ac.sendRsp(err)
+	if err == nil {
+		err = eErr
+	}
+	return err
+}
+
+func (ac *appServerCnc) AddIStream(id string) error {
+	return ac.runAndResp(func(asc *appServerCnc) error {
+		_, err := asc.cnc.AddIStream(id)
+		return err
+	})
+}
+
+func (ac *appServerCnc) GetOStream(id string) error {
+	return ac.runAndResp(func(asc *appServerCnc) error {
+		_, err := asc.cnc.AddOStream(id)
+		return err
+	})
+}
+
+func (ac *appServerCnc) GetFunction(id string, iss []IStream, oss []OStream) (FcServer, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (ac *appServerCnc) RunFunction(funcId string) error {
-	var (
-		err error
-		fw  stf.Function
-	)
-	defer func() {
-		if iErr := ac.sendRsp(err); iErr != nil {
-			err = iErr
+	return ac.runAndResp(func(asc *appServerCnc) error {
+		fw, err := stf.NewSyncFuncWrapper(
+			ac.cnc.GetCtx(),
+			func(in any) any {
+				return fmt.Sprintf("RunSyncFunction: %s(%s)", funcId, in)
+			},
+			ac.cnc.GetSyncStream(),
+			ac.cnc.GetSyncStream(),
+		)
+		if err != nil {
+			return err
 		}
-	}()
-	_ = fw
-	fw, err = stf.NewSyncFuncWrapper(
-		ac.cnc.GetCtx(),
-		func(in any) any {
-			return fmt.Sprintf("RunSyncFunction: %s(%s)", funcId, in)
-		},
-		ac.cnc.GetSyncStream(),
-		ac.cnc.GetSyncStream(),
-	)
-	if err != nil {
-		return err
-	}
-	if err = fw.Run(); err != nil {
-		return err
-	}
-	return nil
+		if err = fw.Run(); err != nil {
+			return err
+		}
+		return nil
+	})
 }
 
 func (ac *appServerCnc) GetLogger() *slog.Logger {
@@ -149,31 +158,25 @@ var _ AppServer = &appServer{}
 
 func (as *appServer) NewCnc(qc quic.Connection) {
 	var err error
-	cnc := &connection{
-		ctx:          as.ctx,
-		qc:           qc,
-		id:           qc.RemoteAddr().String(),
-		isQuicServer: true,
-		isAppServer:  true,
-		logger:       as.logger,
-	}
+	id := qc.RemoteAddr().String()
+	cnc := NewConnection(as.ctx, qc, id, true, true, as.logger)
 	if err := cnc.SetCtrlStream(); err != nil {
 		cnc.GetLogger().Error("AppServerConnectionHandler", "err", err)
-		cnc.qc.CloseWithError(0, err.Error())
+		qc.CloseWithError(0, err.Error())
 		return
 	}
 	if err := cnc.SetSyncStream(); err != nil {
 		cnc.GetLogger().Error("AppServerConnectionHandler", "err", err)
-		cnc.qc.CloseWithError(0, err.Error())
+		qc.CloseWithError(0, err.Error())
 		return
 	}
 	ac := &appServerCnc{
 		cnc: cnc,
 	}
-	as.cncs[cnc.id] = ac
+	as.cncs[id] = ac
 	defer func() {
 		ac.Close(err)
-		delete(as.cncs, cnc.id)
+		delete(as.cncs, id)
 	}()
 	for {
 		select {

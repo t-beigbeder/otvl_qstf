@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"github.com/quic-go/quic-go"
 	"github.com/t-beigbeder/otvl_qstf/internal/netutils"
-	"github.com/t-beigbeder/otvl_qstf/stf"
 	"io"
 	"log/slog"
 	"sync"
@@ -18,60 +17,9 @@ type AppClient interface {
 	AddIStream(id string) (OStream, error)
 	GetOStream(id string) (IStream, error)
 	RunSyncFunction(id string, in any, out any) error
-	//RunRemoteCommand(cs stf.CommandSpec) error
-	GetFunction(id string, iss []OStream, oss []IStream) (FcClient, error)
+	NewFunction(id string) error
+	FuncAddIStream(fcId string) error
 }
-
-type FcClient interface {
-	Run() error
-	Start() error
-	Wait() error
-	Terminate()
-	State() stf.FunctionState
-	Options() stf.FcOptions
-	Error() error
-}
-
-type fcClient struct {
-	id string
-}
-
-func (fc *fcClient) Run() error {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (fc *fcClient) Start() error {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (fc *fcClient) Wait() error {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (fc *fcClient) Terminate() {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (fc *fcClient) State() stf.FunctionState {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (fc *fcClient) Options() stf.FcOptions {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (fc *fcClient) Error() error {
-	//TODO implement me
-	panic("implement me")
-}
-
-var _ FcClient = &fcClient{}
 
 type appClient struct {
 	cnc    Connection
@@ -80,10 +28,10 @@ type appClient struct {
 
 var _ AppClient = &appClient{}
 
-func (ac *appClient) reqRoundTrip(cmd string, funcId string, subProcess func(*appClient) error) error {
+func (ac *appClient) reqRoundTrip(cmd string, stId, funcId string, subProcess func(*appClient) error) error {
 	ac.ctlMux.Lock()
 	defer ac.ctlMux.Unlock()
-	crqm := CtrlReqMsg{Command: cmd, FunctionId: funcId}
+	crqm := CtrlReqMsg{Command: cmd, StreamId: stId, FunctionId: funcId}
 	bs, err := json.Marshal(crqm)
 	if err != nil {
 		return err
@@ -123,18 +71,29 @@ func (ac *appClient) reqRoundTrip(cmd string, funcId string, subProcess func(*ap
 }
 
 func (ac *appClient) AddIStream(id string) (OStream, error) {
-	//TODO implement me
-	panic("implement me")
+	var os OStream
+	err := ac.reqRoundTrip(CmdAddOStream, id, "", func(client *appClient) error {
+		var iErr error
+		os, iErr = client.cnc.AddOStream(id)
+		return iErr
+	})
+	return os, err
 }
 
 func (ac *appClient) GetOStream(id string) (IStream, error) {
-	//TODO implement me
-	panic("implement me")
+	var is IStream
+	err := ac.reqRoundTrip(CmdAddIStream, id, "", func(client *appClient) error {
+		var iErr error
+		is, iErr = client.cnc.AddIStream(id)
+		return iErr
+	})
+	return is, err
 }
 
 func (ac *appClient) RunSyncFunction(funcId string, in any, out any) error {
 	err := ac.reqRoundTrip(
 		CmdRunSyncFunction,
+		"",
 		funcId,
 		func(client *appClient) error {
 			bs, err := json.Marshal(in)
@@ -167,11 +126,6 @@ func (ac *appClient) RunSyncFunction(funcId string, in any, out any) error {
 	return err
 }
 
-func (ac *appClient) GetFunction(id string, iss []OStream, oss []IStream) (FcClient, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
 func NewAppClient(ctx context.Context, sAddr string, logger *slog.Logger) (AppClient, error) {
 	var (
 		qc  quic.Connection
@@ -186,17 +140,12 @@ func NewAppClient(ctx context.Context, sAddr string, logger *slog.Logger) (AppCl
 			qc.CloseWithError(0, "")
 		}
 	}()
-	cnc := connection{
-		ctx:    ctx,
-		qc:     qc,
-		id:     "client",
-		logger: logger,
-	}
+	cnc := NewConnection(ctx, qc, "client", false, false, logger)
 	if err := cnc.SetCtrlStream(); err != nil {
 		return nil, err
 	}
 	if err := cnc.SetSyncStream(); err != nil {
 		return nil, err
 	}
-	return &appClient{cnc: &cnc}, nil
+	return &appClient{cnc: cnc}, nil
 }

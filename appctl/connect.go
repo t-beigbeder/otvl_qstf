@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"strconv"
+	"sync"
 )
 
 const (
@@ -22,9 +23,14 @@ type Connection interface {
 	GetCtrlStream() IOStream
 	SetSyncStream() error
 	GetSyncStream() IOStream
+	AddIStream(id string) (IStream, error)
+	AddOStream(id string) (OStream, error)
+	GetIStream(id string) IStream
+	GetOStream(id string) OStream
 }
 
 type connection struct {
+	mmux         sync.Mutex
 	ctx          context.Context
 	qc           quic.Connection
 	id           string
@@ -32,10 +38,25 @@ type connection struct {
 	isAppServer  bool
 	ctlStream    IOStream
 	syncStream   IOStream
+	iss          map[string]IStream
+	oss          map[string]OStream
 	logger       *slog.Logger
 }
 
 var _ Connection = &connection{}
+
+func NewConnection(ctx context.Context, qc quic.Connection, id string, isQuicServer, isAppServer bool, logger *slog.Logger) Connection {
+	return &connection{
+		ctx:          ctx,
+		qc:           qc,
+		id:           id,
+		isQuicServer: isQuicServer,
+		isAppServer:  isAppServer,
+		iss:          make(map[string]IStream),
+		oss:          make(map[string]OStream),
+		logger:       logger,
+	}
+}
 
 func (c *connection) GetCtx() context.Context {
 	return c.ctx
@@ -121,4 +142,58 @@ func (c *connection) SetSyncStream() (err error) {
 
 func (c *connection) GetSyncStream() IOStream {
 	return c.syncStream
+}
+
+func (c *connection) AddIStream(id string) (IStream, error) {
+	if id == "" {
+		prefix := "in"
+		if !c.isAppServer {
+			prefix = "out"
+		}
+		id = NextId(c.id + "-" + prefix)
+	}
+	c.mmux.Lock()
+	defer c.mmux.Unlock()
+	_, ok := c.iss[id]
+	if ok {
+		return nil, fmt.Errorf("stream already exists: %s", id)
+	}
+	qst, read, _, err := c.makeQStream(id, true)
+	if err != nil {
+		return nil, err
+	}
+	c.iss[id] = NewIStream(id, qst, read)
+	return c.iss[id], nil
+}
+
+func (c *connection) AddOStream(id string) (OStream, error) {
+	if id == "" {
+		prefix := "out"
+		if !c.isAppServer {
+			prefix = "in"
+		}
+		id = NextId(c.id + "-" + prefix)
+	}
+	c.mmux.Lock()
+	defer c.mmux.Unlock()
+	_, ok := c.oss[id]
+	if ok {
+		return nil, fmt.Errorf("stream already exists: %s", id)
+	}
+	qst, _, written, err := c.makeQStream(id, false)
+	if err != nil {
+		return nil, err
+	}
+	c.oss[id] = NewOStream(id, qst, written)
+	return c.oss[id], nil
+}
+
+func (c *connection) GetIStream(id string) IStream {
+	is, _ := c.iss[id]
+	return is
+}
+
+func (c *connection) GetOStream(id string) OStream {
+	os, _ := c.oss[id]
+	return os
 }

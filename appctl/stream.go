@@ -39,8 +39,8 @@ func (is *istream) Read(p []byte) (n int, err error) {
 	return
 }
 
-func NewIStream(id string, is quic.Stream) IStream {
-	return &istream{id, is, 0}
+func NewIStream(id string, is quic.Stream, read int) IStream {
+	return &istream{id, is, read}
 }
 
 type ostream struct {
@@ -61,8 +61,8 @@ func (os *ostream) Write(p []byte) (n int, err error) {
 	return
 }
 
-func NewOStream(id string, os quic.Stream) OStream {
-	return &ostream{id, os, 0}
+func NewOStream(id string, os quic.Stream, written int) OStream {
+	return &ostream{id, os, written}
 }
 
 type iostream struct {
