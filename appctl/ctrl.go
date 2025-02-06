@@ -26,26 +26,36 @@ func NextId(prefix string) string {
 }
 
 const (
-	CmdAddIStream      = "AddIStream"
-	CmdAddOStream      = "AddOStream"
-	CmdRunSyncFunction = "RunSyncFunction"
-	CmdNewFunction     = "NewFunction"
-	CmdFuncAddIStream  = "FuncAddIStream"
-	CmdFuncAddOStream  = "FuncAddOStream"
-	CmdFuncRun         = "FuncRun"
-	CmdFuncStart       = "FuncStart"
-	CmdFuncWait        = "FuncWait"
-	CmdFuncTerminate   = "FuncTerminate"
-	MaxReqSize         = 256
-	MaxRspSize         = 256
+	CmdAddIStream       = "AddIStream"
+	CmdAddOStream       = "AddOStream"
+	CmdRunSyncFunction  = "RunSyncFunction"
+	FNameNewFunction    = "/stf/NewFunction"
+	FNameFuncAddIStream = "/stf/FuncAddIStream"
+	FnameFuncAddOStream = "/stf/FuncAddOStream"
+	FnameFuncRun        = "/stf/FuncRun"
+	FnameFuncStart      = "/stf/FuncStart"
+	FnameFuncWait       = "/stf/FuncWait"
+	FnameFuncTerminate  = "/stf/FuncTerminate"
+	MaxReqSize          = 256
+	MaxRspSize          = 256
 )
 
 type CtrlReqMsg struct {
-	Command    string `json:"command"`
-	StreamId   string `json:"streamId,omitempty"`
-	FunctionId string `json:"functionId,omitempty"`
+	Command  string `json:"command"`
+	StreamId string `json:"streamId,omitempty"`
+	FName    string `json:"fName,omitempty"`
 }
 
 type CtrlRspMsg struct {
 	Error string `json:"error,omitempty"`
+}
+
+type NewFunctionReqMsg struct {
+	Name string `json:"name"`
+	Id   string `json:"id"`
+}
+
+type NewFunctionRespMsg struct {
+	Error string       `json:"error,omitempty"`
+	Desc  FunctionDesc `json:"desc,omitempty"`
 }

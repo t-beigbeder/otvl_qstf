@@ -47,6 +47,9 @@ func TestNewAppClientRunFunc(t *testing.T) {
 	is, err := ac.GetOStream("")
 	require.NoError(t, err)
 	_, _ = is, os
+	fd, err := ac.NewFunction("TestNewAppClientRunFunc", "")
+	require.NoError(t, err)
+	_ = fd
 	cancel()
 	time.Sleep(20 * time.Millisecond)
 }

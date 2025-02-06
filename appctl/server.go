@@ -52,7 +52,7 @@ func (ac *appServerCnc) Handle() error {
 	case CmdAddOStream:
 		return ac.GetOStream(crqm.StreamId)
 	case CmdRunSyncFunction:
-		return ac.RunFunction(crqm.FunctionId)
+		return ac.RunFunction(crqm.FName)
 	default:
 		return fmt.Errorf("unknown command: %s", crqm.Command)
 	}

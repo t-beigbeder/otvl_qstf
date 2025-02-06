@@ -150,7 +150,7 @@ func (c *connection) AddIStream(id string) (IStream, error) {
 		if !c.isAppServer {
 			prefix = "out"
 		}
-		id = NextId(c.id + "-" + prefix)
+		id = NextId("/" + c.id + "/" + prefix)
 	}
 	c.mmux.Lock()
 	defer c.mmux.Unlock()
@@ -172,7 +172,7 @@ func (c *connection) AddOStream(id string) (OStream, error) {
 		if !c.isAppServer {
 			prefix = "in"
 		}
-		id = NextId(c.id + "-" + prefix)
+		id = NextId("/" + c.id + "/" + prefix)
 	}
 	c.mmux.Lock()
 	defer c.mmux.Unlock()

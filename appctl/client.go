@@ -16,9 +16,8 @@ import (
 type AppClient interface {
 	AddIStream(id string) (OStream, error)
 	GetOStream(id string) (IStream, error)
-	RunSyncFunction(id string, in any, out any) error
-	NewFunction(id string) error
-	FuncAddIStream(fcId string) error
+	RunSyncFunction(fName string, in any, out any) error
+	NewFunction(fName string, id string) (*FunctionDesc, error)
 }
 
 type appClient struct {
@@ -31,7 +30,7 @@ var _ AppClient = &appClient{}
 func (ac *appClient) reqRoundTrip(cmd string, stId, funcId string, subProcess func(*appClient) error) error {
 	ac.ctlMux.Lock()
 	defer ac.ctlMux.Unlock()
-	crqm := CtrlReqMsg{Command: cmd, StreamId: stId, FunctionId: funcId}
+	crqm := CtrlReqMsg{Command: cmd, StreamId: stId, FName: funcId}
 	bs, err := json.Marshal(crqm)
 	if err != nil {
 		return err
@@ -90,11 +89,11 @@ func (ac *appClient) GetOStream(id string) (IStream, error) {
 	return is, err
 }
 
-func (ac *appClient) RunSyncFunction(funcId string, in any, out any) error {
+func (ac *appClient) RunSyncFunction(fName string, in any, out any) error {
 	err := ac.reqRoundTrip(
 		CmdRunSyncFunction,
 		"",
-		funcId,
+		fName,
 		func(client *appClient) error {
 			bs, err := json.Marshal(in)
 			if err != nil {
@@ -113,7 +112,7 @@ func (ac *appClient) RunSyncFunction(funcId string, in any, out any) error {
 				return err
 			}
 			bln := binary.BigEndian.Uint32(bs)
-			if bln > MaxRspSize { // FIXME: depend on funcId
+			if bln > MaxRspSize { // FIXME: depend on fName
 				return fmt.Errorf("response too large (%d > %d)", bln, MaxRspSize)
 			}
 			bs = make([]byte, bln)
@@ -124,6 +123,21 @@ func (ac *appClient) RunSyncFunction(funcId string, in any, out any) error {
 			return nil
 		})
 	return err
+}
+
+func (ac *appClient) NewFunction(fName string, id string) (*FunctionDesc, error) {
+	if id == "" {
+		id = NextId(fmt.Sprintf("/%s/fc", fName))
+	}
+	var rsp NewFunctionRespMsg
+	err := ac.RunSyncFunction(FNameNewFunction, &NewFunctionReqMsg{fName, id}, &rsp)
+	if err != nil {
+		return nil, err
+	}
+	if rsp.Error != "" {
+		return nil, errors.New(rsp.Error)
+	}
+	return &(rsp.Desc), nil
 }
 
 func NewAppClient(ctx context.Context, sAddr string, logger *slog.Logger) (AppClient, error) {
