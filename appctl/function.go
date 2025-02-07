@@ -39,27 +39,34 @@ type FunctionDesc struct {
 }
 
 type FunctionCatalog struct {
-	mux sync.RWMutex
-	fds map[string]FunctionDesc
-	sws map[string]stf.StartWaiter
+	mux        sync.RWMutex
+	fds        map[string]FunctionDesc
+	sws        map[string]stf.StartWaiter
+	wrappedFns map[string]func(any) any
 }
 
 func NewFunctionCatalog() *FunctionCatalog {
-	return &FunctionCatalog{fds: make(map[string]FunctionDesc)}
+	return &FunctionCatalog{
+		fds:        make(map[string]FunctionDesc),
+		sws:        make(map[string]stf.StartWaiter),
+		wrappedFns: make(map[string]func(any) any),
+	}
 }
 
 func (cat *FunctionCatalog) DeclareFunction(
-	fn string,
 	fnDesc FunctionDesc,
 	sw stf.StartWaiter,
+	wrappedFn func(any) any,
 ) error {
 	cat.mux.Lock()
 	defer cat.mux.Unlock()
+	fn := fnDesc.Name
 	_, ok := cat.fds[fn]
 	if ok {
 		return fmt.Errorf("function %s already exists", fn)
 	}
 	cat.fds[fn] = fnDesc
 	cat.sws[fn] = sw
+	cat.wrappedFns[fn] = wrappedFn
 	return nil
 }
