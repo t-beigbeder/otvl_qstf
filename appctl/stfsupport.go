@@ -14,6 +14,7 @@ func DeclareStfsNewFunction(cat *FunctionCatalog) error {
 				res.Error = fmt.Sprintf("NewFunction: invalid input type %T", in)
 				return res
 			}
+			
 			res.Error = "not yet implemented"
 			return res
 		})

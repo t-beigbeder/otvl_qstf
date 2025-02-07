@@ -26,14 +26,14 @@ func (sw *sfwStartWait) Wait() error {
 
 func NewSyncFuncWrapper(ctx context.Context, wrapped func(any) any, rr io.Reader, wr io.Writer, opts ...FcOption) (Function, error) {
 	sw := &sfwStartWait{}
-	fc, err := NewFunction(ctx, sw, opts...)
+	fc, err := NewFunction(sw, opts...)
 	if err != nil {
 		return nil, err
 	}
 	if fc.Options().Terminable {
 		return nil, errors.New("a sync function cannot be set terminable")
 	}
-	os, err := fc.AddOutStream(wr, OstDiscrete(true), OstMaxNb(1),
+	os, err := fc.AddOutStream(ctx, wr, OstDiscrete(true), OstMaxNb(1),
 		OstAGet(
 			func() (any, error) {
 				if !sw.wrappedCalled {
@@ -45,7 +45,7 @@ func NewSyncFuncWrapper(ctx context.Context, wrapped func(any) any, rr io.Reader
 	if err != nil {
 		return nil, err
 	}
-	is, err := fc.AddInStream(rr, IstDiscrete(true), IstMaxNb(1),
+	is, err := fc.AddInStream(ctx, rr, IstDiscrete(true), IstMaxNb(1),
 		IstASet(json.Unmarshal, func(ia any) error {
 			sw.wrappedCalled = true
 			sw.wrappedResult = wrapped(ia)

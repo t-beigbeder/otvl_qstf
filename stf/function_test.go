@@ -28,16 +28,16 @@ func (t testSw) Wait() error {
 var _ StartWaiter = &testSw{}
 
 func TestTerminable(t *testing.T) {
+	ctx := context.Background()
 	sw := &testSw{results: make(chan string, 1)}
 	fc, err := NewFunction(
-		context.Background(),
 		sw,
 		FcTerminable(true),
 	)
 	require.NoError(t, err)
 
 	out := newBufWr()
-	oss, err := fc.AddOutStream(out, OstDiscrete(true),
+	oss, err := fc.AddOutStream(ctx, out, OstDiscrete(true),
 		OstBGet(
 			func() ([]byte, error) {
 				result, ok := <-sw.results
@@ -59,7 +59,7 @@ func TestTerminable(t *testing.T) {
 	}
 	in := bytes.NewReader(ttbs)
 
-	is, err := fc.AddInStream(in, IstDiscrete(true),
+	is, err := fc.AddInStream(ctx, in, IstDiscrete(true),
 		IstBSet(
 			func(bs []byte) error {
 				sw.results <- string(bs)

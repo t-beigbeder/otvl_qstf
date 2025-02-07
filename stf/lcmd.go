@@ -49,20 +49,20 @@ func NewLocalCommand(
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
 	sw := &lcStartWait{cmd: cmd}
-	fc, err := NewFunction(ctx, sw, opts...)
+	fc, err := NewFunction(sw, opts...)
 	if err != nil {
 		return nil, err
 	}
 	if fc.Options().Terminable {
 		return nil, errors.New("a local command function cannot be set terminable")
 	}
-	if sw.is, err = fc.AddInStream(stdin, IstName("stdin")); err != nil {
+	if sw.is, err = fc.AddInStream(ctx, stdin, IstName("stdin")); err != nil {
 		return nil, err
 	}
-	if sw.os, err = fc.AddOutStream(stdout, OstName("stdout")); err != nil {
+	if sw.os, err = fc.AddOutStream(ctx, stdout, OstName("stdout")); err != nil {
 		return nil, err
 	}
-	if sw.es, err = fc.AddOutStream(stderr, OstName("stderr")); err != nil {
+	if sw.es, err = fc.AddOutStream(ctx, stderr, OstName("stderr")); err != nil {
 		return nil, err
 	}
 	return fc, nil
