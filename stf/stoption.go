@@ -1,6 +1,9 @@
 package stf
 
-import "errors"
+import (
+	"context"
+	"errors"
+)
 
 // StOptions can be used to create a customized stream.
 type StOptions struct {
@@ -29,7 +32,7 @@ type IstOptions struct {
 	BSize int
 
 	// BSet enables to provide continuously the data read to the client.
-	BSet func([]byte) error
+	BSet func(context.Context, []byte) error
 
 	// Unmarshaller in Discrete mode converts received raw data to structured data.
 	Unmarshaller func(data []byte, v any) error
@@ -38,7 +41,7 @@ type IstOptions struct {
 	NewASet func() any
 
 	// ASet enables to provide continuously the structured data read to the client.
-	ASet func(any) error
+	ASet func(context.Context, any) error
 }
 
 // IstOption is a function on the options for an input stream.
@@ -85,7 +88,7 @@ func IstBsize(s int) IstOption {
 }
 
 // IstBSet is a IstOption to set the function providing the data read to the client.
-func IstBSet(bset func([]byte) error) IstOption {
+func IstBSet(bset func(context.Context, []byte) error) IstOption {
 	return func(o *IstOptions) error {
 		if bset == nil {
 			return errors.New("no BSet function")
@@ -96,7 +99,7 @@ func IstBSet(bset func([]byte) error) IstOption {
 }
 
 // IstASet is a IstOption to set the functions unmarshalling and providing the structured data read to the client.
-func IstASet(unmarshal func(data []byte, v any) error, na func() any, aset func(any) error) IstOption {
+func IstASet(unmarshal func(data []byte, v any) error, na func() any, aset func(context.Context, any) error) IstOption {
 	return func(o *IstOptions) error {
 		var err error
 		if unmarshal == nil {
@@ -123,10 +126,10 @@ type OstOptions struct {
 	StOptions
 
 	// BGet enables to request on demand the data to be written from the client.
-	BGet func() ([]byte, error)
+	BGet func(context.Context) ([]byte, error)
 
 	// AGet in discrete mode enables to request on demand the structured data to be written from the client.
-	AGet func() (any, error)
+	AGet func(context.Context) (any, error)
 
 	// Marshaller in discrete mode converts structured data to raw data to be written.
 	Marshaller func(any) ([]byte, error)
@@ -168,7 +171,7 @@ func OstMaxNb(i int) OstOption {
 }
 
 // OstBGet is a OstOption to set the function requesting on demand the data to be written from the client.
-func OstBGet(bget func() ([]byte, error)) OstOption {
+func OstBGet(bget func(context.Context) ([]byte, error)) OstOption {
 	return func(o *OstOptions) error {
 		if bget == nil {
 			return errors.New("no BGet function")
@@ -179,7 +182,7 @@ func OstBGet(bget func() ([]byte, error)) OstOption {
 }
 
 // OstAGet is a OstOption to set the functions requesting on demand the structured data to be written from the client, and the marshaller to convert it to raw data.
-func OstAGet(aget func() (any, error), marshaller func(any) ([]byte, error)) OstOption {
+func OstAGet(aget func(context.Context) (any, error), marshaller func(any) ([]byte, error)) OstOption {
 	return func(o *OstOptions) error {
 		var err error
 		if aget == nil {

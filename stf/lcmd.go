@@ -22,11 +22,11 @@ type lcStartWait struct {
 
 var _ StartWaiter = &lcStartWait{}
 
-func (sw *lcStartWait) Start() error {
+func (sw *lcStartWait) Start(_ context.Context) error {
 	return sw.cmd.Start()
 }
 
-func (sw *lcStartWait) Wait() error {
+func (sw *lcStartWait) Wait(_ context.Context) error {
 	err := sw.cmd.Wait()
 	if err != nil {
 		return err

@@ -59,3 +59,11 @@ type NewFunctionRespMsg struct {
 	Error string       `json:"error,omitempty"`
 	Desc  FunctionDesc `json:"desc,omitempty"`
 }
+
+type FuncOperateReqMsg struct {
+	Id string `json:"id"`
+}
+
+type FuncOperateRespMsg struct {
+	Error string `json:"error,omitempty"`
+}

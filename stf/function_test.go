@@ -16,12 +16,12 @@ type testSw struct {
 	results chan string
 }
 
-func (sw *testSw) Start() error {
+func (sw *testSw) Start(_ context.Context) error {
 	sw.is.Start()
 	return nil
 }
 
-func (t testSw) Wait() error {
+func (t testSw) Wait(_ context.Context) error {
 	return nil
 }
 
@@ -29,8 +29,9 @@ var _ StartWaiter = &testSw{}
 
 func TestTerminable(t *testing.T) {
 	sw := &testSw{results: make(chan string, 1)}
+	ctx := context.Background()
 	fc, err := NewFunction(
-		context.Background(),
+		ctx,
 		sw,
 		FcTerminable(true),
 	)
@@ -39,7 +40,7 @@ func TestTerminable(t *testing.T) {
 	out := newBufWr()
 	oss, err := fc.AddOutStream(out, OstDiscrete(true),
 		OstBGet(
-			func() ([]byte, error) {
+			func(_ context.Context) ([]byte, error) {
 				result, ok := <-sw.results
 				if !ok {
 					return nil, errors.New("OstBGet no more data")
@@ -61,7 +62,7 @@ func TestTerminable(t *testing.T) {
 
 	is, err := fc.AddInStream(in, IstDiscrete(true),
 		IstBSet(
-			func(bs []byte) error {
+			func(_ context.Context, bs []byte) error {
 				sw.results <- string(bs)
 				time.Sleep(40 * time.Millisecond)
 				return nil

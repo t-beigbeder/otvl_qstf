@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/quic-go/quic-go"
+	"github.com/t-beigbeder/otvl_qstf/stf"
 	"io"
 	"log/slog"
 	"strconv"
@@ -27,6 +28,8 @@ type Connection interface {
 	AddOStream(id string) (OStream, error)
 	GetIStream(id string) IStream
 	GetOStream(id string) OStream
+	NewFunction(id string, fc stf.Function) error
+	GetFunction(id string) stf.Function
 }
 
 type connection struct {
@@ -40,22 +43,25 @@ type connection struct {
 	syncStream   IOStream
 	iss          map[string]IStream
 	oss          map[string]OStream
+	funcs        map[string]stf.Function
 	logger       *slog.Logger
 }
 
 var _ Connection = &connection{}
 
 func NewConnection(ctx context.Context, qc quic.Connection, id string, isQuicServer, isAppServer bool, logger *slog.Logger) Connection {
-	return &connection{
-		ctx:          ctx,
+	cn := &connection{
 		qc:           qc,
 		id:           id,
 		isQuicServer: isQuicServer,
 		isAppServer:  isAppServer,
 		iss:          make(map[string]IStream),
 		oss:          make(map[string]OStream),
-		logger:       logger,
+		funcs:        make(map[string]stf.Function),
+		logger:       logger.With("connId", id),
 	}
+	cn.ctx = context.WithValue(ctx, "cn", cn)
+	return cn
 }
 
 func (c *connection) GetCtx() context.Context {
@@ -196,4 +202,21 @@ func (c *connection) GetIStream(id string) IStream {
 func (c *connection) GetOStream(id string) OStream {
 	os, _ := c.oss[id]
 	return os
+}
+
+func (c *connection) NewFunction(id string, fc stf.Function) error {
+	c.mmux.Lock()
+	defer c.mmux.Unlock()
+	_, ok := c.funcs[id]
+	if ok {
+		return fmt.Errorf("function %s already exists", id)
+	}
+	c.logger.Info("new function", "id", id)
+	c.funcs[id] = fc
+	return nil
+}
+
+func (c *connection) GetFunction(id string) stf.Function {
+	fc, _ := c.funcs[id]
+	return fc
 }

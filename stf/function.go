@@ -43,8 +43,8 @@ type Function interface {
 }
 
 type StartWaiter interface {
-	Start() error
-	Wait() error
+	Start(context.Context) error
+	Wait(context.Context) error
 }
 
 type function struct {
@@ -176,7 +176,7 @@ func (fc *function) Start() error {
 	if err := fc.mustBeInState(StateInit); err != nil {
 		return fc.setState(StateFinished, err)
 	}
-	if err := fc.sw.Start(); err != nil {
+	if err := fc.sw.Start(fc.ctx); err != nil {
 		return fc.setState(StateFinished, err)
 	}
 	fc.setState(StateStarted, nil)
@@ -211,7 +211,7 @@ func (fc *function) Wait() error {
 	if err := fc.mustBeInState(StateStarted); err != nil {
 		return fc.setState(StateFinished, err)
 	}
-	if err := fc.sw.Wait(); err != nil {
+	if err := fc.sw.Wait(fc.ctx); err != nil {
 		return fc.setState(StateFinished, err)
 	}
 	fc.wg.Wait()

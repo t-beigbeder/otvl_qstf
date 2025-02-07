@@ -13,16 +13,70 @@ import (
 	"sync"
 )
 
+type FcClient interface {
+	GetDesc() *FunctionDesc
+	GetId() string
+	Run() error
+	Start() error
+	Wait() error
+	Terminate() error
+}
+
+type fcClient struct {
+	ac   *appClient
+	desc *FunctionDesc
+	id   string
+}
+
+func (fc *fcClient) GetDesc() *FunctionDesc {
+	return fc.desc
+}
+
+func (fc *fcClient) GetId() string {
+	return fc.id
+}
+
+func (fc *fcClient) operate(fName string) error {
+	var rsp FuncOperateRespMsg
+	err := fc.ac.RunSyncFunction(fName, &FuncOperateReqMsg{fc.id}, &rsp)
+	if err != nil {
+		return err
+	}
+	if rsp.Error != "" {
+		return errors.New(rsp.Error)
+	}
+	return nil
+
+}
+func (fc *fcClient) Run() error {
+	return fc.operate(FnameFuncRun)
+}
+
+func (fc *fcClient) Start() error {
+	return fc.operate(FnameFuncStart)
+}
+
+func (fc *fcClient) Wait() error {
+	return fc.operate(FnameFuncWait)
+}
+
+func (fc *fcClient) Terminate() error {
+	return fc.operate(FnameFuncTerminate)
+}
+
 type AppClient interface {
 	AddIStream(id string) (OStream, error)
 	GetOStream(id string) (IStream, error)
 	RunSyncFunction(fName string, in any, out any) error
-	NewFunction(fName string, id string) (*FunctionDesc, error)
+	NewFunction(fName string, id string) (FcClient, error)
+	GetFunction(id string) FcClient
 }
 
 type appClient struct {
 	cnc    Connection
 	ctlMux sync.Mutex
+	dMux   sync.Mutex
+	funcs  map[string]FcClient
 }
 
 var _ AppClient = &appClient{}
@@ -125,9 +179,15 @@ func (ac *appClient) RunSyncFunction(fName string, in any, out any) error {
 	return err
 }
 
-func (ac *appClient) NewFunction(fName string, id string) (*FunctionDesc, error) {
+func (ac *appClient) NewFunction(fName string, id string) (FcClient, error) {
 	if id == "" {
 		id = NextId(fmt.Sprintf("/%s/fc", fName))
+	}
+	ac.dMux.Lock()
+	defer ac.dMux.Unlock()
+	_, ok := ac.funcs[id]
+	if ok {
+		return nil, fmt.Errorf("function %s id %s already exists", fName, id)
 	}
 	var rsp NewFunctionRespMsg
 	err := ac.RunSyncFunction(FNameNewFunction, &NewFunctionReqMsg{fName, id}, &rsp)
@@ -137,7 +197,14 @@ func (ac *appClient) NewFunction(fName string, id string) (*FunctionDesc, error)
 	if rsp.Error != "" {
 		return nil, errors.New(rsp.Error)
 	}
-	return &(rsp.Desc), nil
+	fc := &fcClient{ac, &(rsp.Desc), id}
+	ac.funcs[id] = fc
+	return fc, nil
+}
+
+func (ac *appClient) GetFunction(id string) FcClient {
+	fc, _ := ac.funcs[id]
+	return fc
 }
 
 func NewAppClient(ctx context.Context, sAddr string, logger *slog.Logger) (AppClient, error) {
@@ -161,5 +228,5 @@ func NewAppClient(ctx context.Context, sAddr string, logger *slog.Logger) (AppCl
 	if err := cnc.SetSyncStream(); err != nil {
 		return nil, err
 	}
-	return &appClient{cnc: cnc}, nil
+	return &appClient{cnc: cnc, funcs: make(map[string]FcClient)}, nil
 }

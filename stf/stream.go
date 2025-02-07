@@ -155,7 +155,7 @@ func (is *inStream) readRaw() looperOut {
 	read, err := is.Read(bs)
 	is.read += read
 	if read != 0 && is.opts.BSet != nil {
-		if iErr := is.opts.BSet(bs[:read]); iErr != nil {
+		if iErr := is.opts.BSet(is.ctx, bs[:read]); iErr != nil {
 			err = iErr
 		}
 	}
@@ -180,7 +180,7 @@ func (is *inStream) readDiscrete() looperOut {
 	read, err = io.ReadFull(is, bs)
 	is.read += read
 	if read != 0 && is.opts.BSet != nil {
-		if iErr := is.opts.BSet(bs[:read]); iErr != nil {
+		if iErr := is.opts.BSet(is.ctx, bs[:read]); iErr != nil {
 			return looperOut{err: err}
 		}
 	}
@@ -189,7 +189,7 @@ func (is *inStream) readDiscrete() looperOut {
 		if iErr := is.opts.Unmarshaller(bs[:read], v); iErr != nil {
 			return looperOut{err: err}
 		}
-		if iErr := is.opts.ASet(v); iErr != nil {
+		if iErr := is.opts.ASet(is.ctx, v); iErr != nil {
 			return looperOut{err: err}
 		}
 	}
@@ -247,7 +247,7 @@ func (os *outStream) writeRaw() looperOut {
 	if os.opts.BGet == nil {
 		return looperOut{err: fmt.Errorf("no BGet specified")}
 	}
-	bs, err := os.opts.BGet()
+	bs, err := os.opts.BGet(os.ctx)
 	if err != nil {
 		return looperOut{err: err}
 	}
@@ -267,11 +267,11 @@ func (os *outStream) writeDiscrete() looperOut {
 		if os.opts.BGet == nil {
 			return looperOut{err: fmt.Errorf("no BGet specified")}
 		}
-		if bs, err = os.opts.BGet(); err != nil {
+		if bs, err = os.opts.BGet(os.ctx); err != nil {
 			return looperOut{err: err}
 		}
 	} else {
-		if v, err = os.opts.AGet(); err != nil {
+		if v, err = os.opts.AGet(os.ctx); err != nil {
 			return looperOut{err: err}
 		}
 		if bs, err = os.opts.Marshaller(v); err != nil {

@@ -35,7 +35,7 @@ func RunTestServer(alpn string,
 				fmt.Fprintf(os.Stderr, "RunTestServer: error accepting connection: %s\n", ierr)
 				return
 			}
-			fmt.Fprintf(os.Stderr, "RunTestServer: new connection: %s\n", cnc.LocalAddr().String())
+			fmt.Fprintf(os.Stderr, "RunTestServer: new connection: %s\n", cnc.RemoteAddr().String())
 			doer(ctx, cnc, logger)
 		}
 	}()

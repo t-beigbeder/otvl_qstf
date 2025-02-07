@@ -52,6 +52,12 @@ func NewFunctionCatalog() *FunctionCatalog {
 		wrappedFns: make(map[string]*stf.WrappedFunction),
 	}
 	_ = DeclareStfsNewFunction(cat)
+	_ = DeclareStfsFuncAddIStream(cat)
+	_ = DeclareStfsFuncAddOStream(cat)
+	_ = DeclareStfsFuncRun(cat)
+	_ = DeclareStfsFuncStart(cat)
+	_ = DeclareStfsFuncWait(cat)
+	_ = DeclareStfsFuncTerminate(cat)
 	return cat
 }
 

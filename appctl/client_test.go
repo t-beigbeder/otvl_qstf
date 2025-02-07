@@ -30,7 +30,7 @@ func TestNewAppClientRunSync(t *testing.T) {
 					a := ""
 					return &a
 				},
-				func(a any) any {
+				func(ctx context.Context, a any) any {
 					return fmt.Sprintf("TestNewAppClientBasic: %v", a)
 				},
 			})
@@ -49,10 +49,35 @@ func TestNewAppClientRunSync(t *testing.T) {
 	time.Sleep(20 * time.Millisecond)
 }
 
+type testSw struct {
+	in any
+}
+
+func (sw *testSw) Start(ctx context.Context) error {
+	acn := ctx.Value("cn")
+	cn := acn.(Connection)
+	if cn != nil {
+		cn.GetLogger().Debug("testSw Start")
+	}
+	return nil
+}
+
+func (sw *testSw) Wait(ctx context.Context) error {
+	acn := ctx.Value("cn")
+	cn := acn.(Connection)
+	if cn != nil {
+		cn.GetLogger().Debug("testSw Wait")
+	}
+	return nil
+}
+
 func TestNewAppClientRunFunc(t *testing.T) {
 	port, cancel, err := RunTestServer(func(as AppServer) {
 		as.Catalog().DeclareFunction(
-			FunctionDesc{Name: "TestNewAppClientRunFunc"}, nil, nil)
+			FunctionDesc{Name: "TestNewAppClientRunFunc"},
+			&testSw{},
+			nil,
+		)
 	})
 	require.NoError(t, err)
 	ac, err := NewAppClient(context.Background(), "localhost:"+port, GetLoggerFor("client"))
@@ -64,9 +89,22 @@ func TestNewAppClientRunFunc(t *testing.T) {
 	is, err := ac.GetOStream("")
 	require.NoError(t, err)
 	_, _ = is, os
-	fd, err := ac.NewFunction("TestNewAppClientRunFunc", "")
+	fc, err := ac.NewFunction("TestNewAppClientRunFunc", "")
 	require.NoError(t, err)
-	_ = fd
+	err = fc.Run()
+	require.NoError(t, err)
+	err = fc.Terminate()
+	require.NoError(t, err)
+
+	fc, err = ac.NewFunction("TestNewAppClientRunFunc", "")
+	require.NoError(t, err)
+	err = fc.Start()
+	require.NoError(t, err)
+	err = fc.Wait()
+	require.NoError(t, err)
+	err = fc.Terminate()
+	require.NoError(t, err)
+
 	cancel()
 	time.Sleep(20 * time.Millisecond)
 }

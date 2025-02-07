@@ -17,7 +17,7 @@ func TestNewSyncFuncWrapperBasic(t *testing.T) {
 	fcw, err := NewSyncFuncWrapper(context.Background(),
 		WrappedFunction{
 			func() any { v := ""; return &v },
-			func(a any) any {
+			func(_ context.Context, a any) any {
 				return "response for " + *(a.(*string))
 			},
 		},
@@ -38,7 +38,7 @@ func TestNewSyncFuncWrapperSlow(t *testing.T) {
 	fcw, err := NewSyncFuncWrapper(context.Background(),
 		WrappedFunction{
 			func() any { v := ""; return &v },
-			func(a any) any {
+			func(_ context.Context, a any) any {
 				time.Sleep(time.Millisecond * 200)
 				return "response for " + *(a.(*string))
 			},
@@ -70,7 +70,7 @@ func TestNewSyncFuncWrapperLarge(t *testing.T) {
 			func() any {
 				return &[]dst{}
 			},
-			func(a any) any {
+			func(_ context.Context, a any) any {
 				return a
 			},
 		},
