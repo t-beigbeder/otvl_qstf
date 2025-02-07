@@ -7,7 +7,7 @@ import (
 )
 
 func TestAppServerConnectionHandlerBasic(t *testing.T) {
-	_, cancel, err := RunTestServer()
+	_, cancel, err := RunTestServer(nil)
 	require.NoError(t, err)
 	cancel()
 	time.Sleep(100 * time.Millisecond)

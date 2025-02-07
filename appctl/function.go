@@ -42,21 +42,23 @@ type FunctionCatalog struct {
 	mux        sync.RWMutex
 	fds        map[string]FunctionDesc
 	sws        map[string]stf.StartWaiter
-	wrappedFns map[string]func(any) any
+	wrappedFns map[string]*stf.WrappedFunction
 }
 
 func NewFunctionCatalog() *FunctionCatalog {
-	return &FunctionCatalog{
+	cat := &FunctionCatalog{
 		fds:        make(map[string]FunctionDesc),
 		sws:        make(map[string]stf.StartWaiter),
-		wrappedFns: make(map[string]func(any) any),
+		wrappedFns: make(map[string]*stf.WrappedFunction),
 	}
+	_ = DeclareStfsNewFunction(cat)
+	return cat
 }
 
 func (cat *FunctionCatalog) DeclareFunction(
 	fnDesc FunctionDesc,
 	sw stf.StartWaiter,
-	wrappedFn func(any) any,
+	wrappedFn *stf.WrappedFunction,
 ) error {
 	cat.mux.Lock()
 	defer cat.mux.Unlock()
@@ -69,4 +71,12 @@ func (cat *FunctionCatalog) DeclareFunction(
 	cat.sws[fn] = sw
 	cat.wrappedFns[fn] = wrappedFn
 	return nil
+}
+
+func (cat *FunctionCatalog) GetFunction(fName string) (*FunctionDesc, stf.StartWaiter, *stf.WrappedFunction, error) {
+	fd, ok := cat.fds[fName]
+	if !ok {
+		return nil, nil, nil, fmt.Errorf("function %s not found", fName)
+	}
+	return &fd, cat.sws[fName], cat.wrappedFns[fName], nil
 }

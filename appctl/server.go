@@ -25,6 +25,7 @@ type AppServerCnc interface {
 
 type appServerCnc struct {
 	cnc Connection
+	cat *FunctionCatalog
 }
 
 func (ac *appServerCnc) Handle() error {
@@ -114,13 +115,18 @@ func (ac *appServerCnc) GetFunction(id string, iss []IStream, oss []OStream) (Fc
 	panic("implement me")
 }
 
-func (ac *appServerCnc) RunFunction(funcId string) error {
+func (ac *appServerCnc) RunFunction(fName string) error {
+	_, _, wf, err := ac.cat.GetFunction(fName)
+	if err != nil {
+		return err
+	}
+	if wf == nil {
+		return fmt.Errorf("function %s has no wrapped function, currently not supported", fName)
+	}
 	return ac.runAndResp(func(asc *appServerCnc) error {
 		fw, err := stf.NewSyncFuncWrapper(
 			ac.cnc.GetCtx(),
-			func(in any) any {
-				return fmt.Sprintf("RunSyncFunction: %s(%s)", funcId, in)
-			},
+			*wf,
 			ac.cnc.GetSyncStream(),
 			ac.cnc.GetSyncStream(),
 		)
@@ -145,16 +151,22 @@ type FcServer interface {
 }
 
 type AppServer interface {
+	Catalog() *FunctionCatalog
 	NewCnc(qc quic.Connection)
 }
 
 type appServer struct {
 	ctx    context.Context
+	cat    *FunctionCatalog
 	logger *slog.Logger
 	cncs   map[string]AppServerCnc
 }
 
 var _ AppServer = &appServer{}
+
+func (as *appServer) Catalog() *FunctionCatalog {
+	return as.cat
+}
 
 func (as *appServer) NewCnc(qc quic.Connection) {
 	var err error
@@ -172,6 +184,7 @@ func (as *appServer) NewCnc(qc quic.Connection) {
 	}
 	ac := &appServerCnc{
 		cnc: cnc,
+		cat: as.cat,
 	}
 	as.cncs[id] = ac
 	defer func() {
@@ -190,8 +203,8 @@ func (as *appServer) NewCnc(qc quic.Connection) {
 	}
 }
 
-func NewAppServer(ctx context.Context, logger *slog.Logger) AppServer {
-	return &appServer{ctx: ctx, logger: logger, cncs: make(map[string]AppServerCnc)}
+func NewAppServer(ctx context.Context, cat *FunctionCatalog, logger *slog.Logger) AppServer {
+	return &appServer{ctx: ctx, cat: cat, logger: logger, cncs: make(map[string]AppServerCnc)}
 }
 
 func RunAppServer(
@@ -204,7 +217,7 @@ func RunAppServer(
 		return err
 	}
 	logger.Info("RunAppServer: listening", "host", host, "port", port)
-	as := NewAppServer(ctx, logger)
+	as := NewAppServer(ctx, NewFunctionCatalog(), logger)
 	for {
 		qc, lErr := listener.Accept(ctx)
 		if lErr != nil {

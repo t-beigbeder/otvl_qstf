@@ -15,8 +15,11 @@ func TestNewSyncFuncWrapperBasic(t *testing.T) {
 	in := bytes.NewReader(wbs)
 	out := newBufWr()
 	fcw, err := NewSyncFuncWrapper(context.Background(),
-		func(a any) any {
-			return "response for " + a.(string)
+		WrappedFunction{
+			func() any { v := ""; return &v },
+			func(a any) any {
+				return "response for " + *(a.(*string))
+			},
 		},
 		in, out)
 	require.NoError(t, err)
@@ -33,9 +36,12 @@ func TestNewSyncFuncWrapperSlow(t *testing.T) {
 	in := bytes.NewReader(wbs)
 	out := newBufWr()
 	fcw, err := NewSyncFuncWrapper(context.Background(),
-		func(a any) any {
-			time.Sleep(time.Millisecond * 200)
-			return "response for " + a.(string)
+		WrappedFunction{
+			func() any { v := ""; return &v },
+			func(a any) any {
+				time.Sleep(time.Millisecond * 200)
+				return "response for " + *(a.(*string))
+			},
 		},
 		in, out)
 	require.NoError(t, err)
@@ -60,8 +66,13 @@ func TestNewSyncFuncWrapperLarge(t *testing.T) {
 	in := bytes.NewReader(wbs)
 	out := newBufWr()
 	fcw, err := NewSyncFuncWrapper(context.Background(),
-		func(a any) any {
-			return a
+		WrappedFunction{
+			func() any {
+				return &[]dst{}
+			},
+			func(a any) any {
+				return a
+			},
 		},
 		in, out)
 	require.NoError(t, err)

@@ -185,8 +185,8 @@ func (is *inStream) readDiscrete() looperOut {
 		}
 	}
 	if is.opts.Unmarshaller != nil {
-		var v any
-		if iErr := is.opts.Unmarshaller(bs[:read], &v); iErr != nil {
+		v := is.opts.NewASet()
+		if iErr := is.opts.Unmarshaller(bs[:read], v); iErr != nil {
 			return looperOut{err: err}
 		}
 		if iErr := is.opts.ASet(v); iErr != nil {

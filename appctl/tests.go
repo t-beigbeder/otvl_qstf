@@ -8,13 +8,16 @@ import (
 	"os"
 )
 
-func RunTestServer() (string, context.CancelFunc, error) {
+func RunTestServer(initializer func(AppServer)) (string, context.CancelFunc, error) {
 	var as AppServer
 	port, cancel, err := netutils.RunTestServer(
 		QstfAlpn,
 		func(ctx context.Context, qc quic.Connection, logger *slog.Logger) {
 			if as == nil {
-				as = NewAppServer(ctx, logger)
+				as = NewAppServer(ctx, NewFunctionCatalog(), logger)
+				if initializer != nil {
+					initializer(as)
+				}
 			}
 			as.NewCnc(qc)
 		}, GetLoggerFor("server"))

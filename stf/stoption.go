@@ -34,6 +34,9 @@ type IstOptions struct {
 	// Unmarshaller in Discrete mode converts received raw data to structured data.
 	Unmarshaller func(data []byte, v any) error
 
+	// NewASet in Discrete mode provide structured data unmarshal receiver.
+	NewASet func() any
+
 	// ASet enables to provide continuously the structured data read to the client.
 	ASet func(any) error
 }
@@ -93,11 +96,14 @@ func IstBSet(bset func([]byte) error) IstOption {
 }
 
 // IstASet is a IstOption to set the functions unmarshalling and providing the structured data read to the client.
-func IstASet(unmarshal func(data []byte, v any) error, aset func(any) error) IstOption {
+func IstASet(unmarshal func(data []byte, v any) error, na func() any, aset func(any) error) IstOption {
 	return func(o *IstOptions) error {
 		var err error
 		if unmarshal == nil {
 			err = errors.Join(err, errors.New("no Unmarshal function"))
+		}
+		if na == nil {
+			err = errors.Join(err, errors.New("no NewASet function"))
 		}
 		if aset == nil {
 			err = errors.Join(err, errors.New("no ASet function"))
@@ -106,6 +112,7 @@ func IstASet(unmarshal func(data []byte, v any) error, aset func(any) error) Ist
 			return err
 		}
 		o.Unmarshaller = unmarshal
+		o.NewASet = na
 		o.ASet = aset
 		return nil
 	}

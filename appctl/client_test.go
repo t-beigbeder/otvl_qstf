@@ -4,12 +4,13 @@ import (
 	"context"
 	"fmt"
 	"github.com/stretchr/testify/require"
+	"github.com/t-beigbeder/otvl_qstf/stf"
 	"testing"
 	"time"
 )
 
 func TestNewAppClientBasic(t *testing.T) {
-	port, cancel, err := RunTestServer()
+	port, cancel, err := RunTestServer(nil)
 	require.NoError(t, err)
 	ac, err := NewAppClient(context.Background(), "localhost:"+port, GetLoggerFor("client"))
 	require.NoError(t, err)
@@ -20,7 +21,20 @@ func TestNewAppClientBasic(t *testing.T) {
 }
 
 func TestNewAppClientRunSync(t *testing.T) {
-	port, cancel, err := RunTestServer()
+	port, cancel, err := RunTestServer(func(as AppServer) {
+		as.Catalog().DeclareFunction(
+			FunctionDesc{Name: "TestNewAppClientBasic"},
+			nil,
+			&stf.WrappedFunction{
+				func() any {
+					a := ""
+					return &a
+				},
+				func(a any) any {
+					return fmt.Sprintf("TestNewAppClientBasic: %v", a)
+				},
+			})
+	})
 	require.NoError(t, err)
 	ac, err := NewAppClient(context.Background(), "localhost:"+port, GetLoggerFor("client"))
 	require.NoError(t, err)
@@ -36,7 +50,10 @@ func TestNewAppClientRunSync(t *testing.T) {
 }
 
 func TestNewAppClientRunFunc(t *testing.T) {
-	port, cancel, err := RunTestServer()
+	port, cancel, err := RunTestServer(func(as AppServer) {
+		as.Catalog().DeclareFunction(
+			FunctionDesc{Name: "TestNewAppClientRunFunc"}, nil, nil)
+	})
 	require.NoError(t, err)
 	ac, err := NewAppClient(context.Background(), "localhost:"+port, GetLoggerFor("client"))
 	require.NoError(t, err)

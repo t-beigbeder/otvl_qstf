@@ -24,7 +24,12 @@ func (sw *sfwStartWait) Wait() error {
 	return nil
 }
 
-func NewSyncFuncWrapper(ctx context.Context, wrapped func(any) any, rr io.Reader, wr io.Writer, opts ...FcOption) (Function, error) {
+type WrappedFunction struct {
+	InputTemplate func() any
+	Wrapped       func(any) any
+}
+
+func NewSyncFuncWrapper(ctx context.Context, wf WrappedFunction, rr io.Reader, wr io.Writer, opts ...FcOption) (Function, error) {
 	sw := &sfwStartWait{}
 	fc, err := NewFunction(ctx, sw, opts...)
 	if err != nil {
@@ -46,12 +51,15 @@ func NewSyncFuncWrapper(ctx context.Context, wrapped func(any) any, rr io.Reader
 		return nil, err
 	}
 	is, err := fc.AddInStream(rr, IstDiscrete(true), IstMaxNb(1),
-		IstASet(json.Unmarshal, func(ia any) error {
-			sw.wrappedCalled = true
-			sw.wrappedResult = wrapped(ia)
-			os.Start()
-			return nil
-		}))
+		IstASet(json.Unmarshal,
+			wf.InputTemplate,
+			func(ia any) error {
+				sw.wrappedCalled = true
+				sw.wrappedResult = wf.Wrapped(ia)
+				os.Start()
+				return nil
+			}),
+	)
 	if err != nil {
 		return nil, err
 	}
