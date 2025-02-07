@@ -29,9 +29,9 @@ func (s FunctionState) String() string {
 }
 
 type Function interface {
-	AddInStream(context.Context, io.Reader, ...IstOption) (InStream, error)
+	AddInStream(io.Reader, ...IstOption) (InStream, error)
 	GetInStream(string) InStream
-	AddOutStream(context.Context, io.Writer, ...OstOption) (OutStream, error)
+	AddOutStream(io.Writer, ...OstOption) (OutStream, error)
 	GetOutStream(string) OutStream
 	Run() error
 	Start() error
@@ -49,6 +49,7 @@ type StartWaiter interface {
 
 type function struct {
 	name       string
+	ctx        context.Context
 	sw         StartWaiter
 	mux        sync.Mutex
 	state      FunctionState
@@ -109,7 +110,7 @@ func (fc *function) activateStream(st *stream, sti Stream) {
 	}()
 }
 
-func (fc *function) AddInStream(ctx context.Context, rr io.Reader, opts ...IstOption) (InStream, error) {
+func (fc *function) AddInStream(rr io.Reader, opts ...IstOption) (InStream, error) {
 	fc.mux.Lock()
 	defer fc.mux.Unlock()
 	if err := fc.mustBeInState(StateInit); err != nil {
@@ -130,7 +131,7 @@ func (fc *function) AddInStream(ctx context.Context, rr io.Reader, opts ...IstOp
 	}
 	fc.allocStName(&sopt.StOptions)
 	is := &inStream{
-		stream: stream{name: sopt.Name, ctx: ctx},
+		stream: stream{name: sopt.Name, ctx: fc.ctx},
 		rr:     rr,
 		opts:   sopt,
 	}
@@ -139,7 +140,7 @@ func (fc *function) AddInStream(ctx context.Context, rr io.Reader, opts ...IstOp
 	return is, nil
 }
 
-func (fc *function) AddOutStream(ctx context.Context, wr io.Writer, opts ...OstOption) (OutStream, error) {
+func (fc *function) AddOutStream(wr io.Writer, opts ...OstOption) (OutStream, error) {
 	fc.mux.Lock()
 	defer fc.mux.Unlock()
 	if err := fc.mustBeInState(StateInit); err != nil {
@@ -160,7 +161,7 @@ func (fc *function) AddOutStream(ctx context.Context, wr io.Writer, opts ...OstO
 	}
 	fc.allocStName(&sopt.StOptions)
 	os := &outStream{
-		stream: stream{name: sopt.Name, ctx: ctx},
+		stream: stream{name: sopt.Name, ctx: fc.ctx},
 		wr:     wr,
 		opts:   sopt,
 	}
@@ -242,7 +243,7 @@ func (fc *function) Error() error {
 	return fc.err
 }
 
-func NewFunction(sw StartWaiter, opts ...FcOption) (Function, error) {
+func NewFunction(ctx context.Context, sw StartWaiter, opts ...FcOption) (Function, error) {
 	var (
 		fopt FcOptions
 		err  error
@@ -258,6 +259,7 @@ func NewFunction(sw StartWaiter, opts ...FcOption) (Function, error) {
 	fc := &function{
 		name:       fopt.Name,
 		terminable: fopt.Terminable,
+		ctx:        ctx,
 		sw:         sw,
 		ins:        make(map[string]*inStream, 1),
 		outs:       make(map[string]*outStream, 1),
