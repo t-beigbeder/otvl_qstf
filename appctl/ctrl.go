@@ -31,11 +31,11 @@ const (
 	CmdRunSyncFunction  = "RunSyncFunction"
 	FNameNewFunction    = "/stf/NewFunction"
 	FNameFuncAddIStream = "/stf/FuncAddIStream"
-	FnameFuncAddOStream = "/stf/FuncAddOStream"
-	FnameFuncRun        = "/stf/FuncRun"
-	FnameFuncStart      = "/stf/FuncStart"
-	FnameFuncWait       = "/stf/FuncWait"
-	FnameFuncTerminate  = "/stf/FuncTerminate"
+	FNameFuncAddOStream = "/stf/FuncAddOStream"
+	FNameFuncRun        = "/stf/FuncRun"
+	FNameFuncStart      = "/stf/FuncStart"
+	FNameFuncWait       = "/stf/FuncWait"
+	FNameFuncTerminate  = "/stf/FuncTerminate"
 	MaxReqSize          = 256
 	MaxRspSize          = 256
 )
@@ -65,5 +65,14 @@ type FuncOperateReqMsg struct {
 }
 
 type FuncOperateRespMsg struct {
+	Error string `json:"error,omitempty"`
+}
+
+type FuncStreamReqMsg struct {
+	FcId string `json:"fcId"`
+	StId string `json:"stId"`
+}
+
+type FuncStreamRespMsg struct {
 	Error string `json:"error,omitempty"`
 }

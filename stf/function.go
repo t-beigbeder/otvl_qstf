@@ -33,6 +33,8 @@ type Function interface {
 	GetInStream(string) InStream
 	AddOutStream(io.Writer, ...OstOption) (OutStream, error)
 	GetOutStream(string) OutStream
+	GetInStreams() []InStream
+	GetOutStreams() []OutStream
 	Run() error
 	Start() error
 	Wait() error
@@ -58,6 +60,8 @@ type function struct {
 	err        error
 	ins        map[string]*inStream
 	outs       map[string]*outStream
+	inList     []*inStream
+	outList    []*outStream
 	wg         sync.WaitGroup
 }
 
@@ -101,6 +105,22 @@ func (fc *function) GetOutStream(s string) OutStream {
 	return os
 }
 
+func (fc *function) GetInStreams() []InStream {
+	res := make([]InStream, 0, len(fc.ins))
+	for _, in := range fc.ins {
+		res = append(res, in)
+	}
+	return res
+}
+
+func (fc *function) GetOutStreams() []OutStream {
+	res := make([]OutStream, 0, len(fc.outs))
+	for _, out := range fc.outs {
+		res = append(res, out)
+	}
+	return res
+}
+
 func (fc *function) activateStream(st *stream, sti Stream) {
 	fc.wg.Add(1)
 	st.ctrChan = make(chan ctrlMsg, 1)
@@ -136,6 +156,7 @@ func (fc *function) AddInStream(rr io.Reader, opts ...IstOption) (InStream, erro
 		opts:   sopt,
 	}
 	fc.ins[sopt.StOptions.Name] = is
+	fc.inList = append(fc.inList, is)
 	fc.activateStream(&is.stream, is)
 	return is, nil
 }
@@ -166,6 +187,7 @@ func (fc *function) AddOutStream(wr io.Writer, opts ...OstOption) (OutStream, er
 		opts:   sopt,
 	}
 	fc.outs[sopt.StOptions.Name] = os
+	fc.outList = append(fc.outList, os)
 	fc.activateStream(&os.stream, os)
 	return os, nil
 }

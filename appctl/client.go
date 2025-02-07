@@ -16,6 +16,8 @@ import (
 type FcClient interface {
 	GetDesc() *FunctionDesc
 	GetId() string
+	AddIStream(OStream) error
+	AddOStream(IStream) error
 	Run() error
 	Start() error
 	Wait() error
@@ -36,7 +38,27 @@ func (fc *fcClient) GetId() string {
 	return fc.id
 }
 
-func (fc *fcClient) operate(fName string) error {
+func (fc *fcClient) streamAction(fName string, stId string) error {
+	var rsp FuncStreamRespMsg
+	err := fc.ac.RunSyncFunction(fName, &FuncStreamReqMsg{fc.id, stId}, &rsp)
+	if err != nil {
+		return err
+	}
+	if rsp.Error != "" {
+		return errors.New(rsp.Error)
+	}
+	return nil
+}
+
+func (fc *fcClient) AddIStream(os OStream) error {
+	return fc.streamAction(FNameFuncAddIStream, os.Id())
+}
+
+func (fc *fcClient) AddOStream(is IStream) error {
+	return fc.streamAction(FNameFuncAddOStream, is.Id())
+}
+
+func (fc *fcClient) fcOperate(fName string) error {
 	var rsp FuncOperateRespMsg
 	err := fc.ac.RunSyncFunction(fName, &FuncOperateReqMsg{fc.id}, &rsp)
 	if err != nil {
@@ -46,22 +68,22 @@ func (fc *fcClient) operate(fName string) error {
 		return errors.New(rsp.Error)
 	}
 	return nil
-
 }
+
 func (fc *fcClient) Run() error {
-	return fc.operate(FnameFuncRun)
+	return fc.fcOperate(FNameFuncRun)
 }
 
 func (fc *fcClient) Start() error {
-	return fc.operate(FnameFuncStart)
+	return fc.fcOperate(FNameFuncStart)
 }
 
 func (fc *fcClient) Wait() error {
-	return fc.operate(FnameFuncWait)
+	return fc.fcOperate(FNameFuncWait)
 }
 
 func (fc *fcClient) Terminate() error {
-	return fc.operate(FnameFuncTerminate)
+	return fc.fcOperate(FNameFuncTerminate)
 }
 
 type AppClient interface {

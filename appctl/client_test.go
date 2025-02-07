@@ -72,9 +72,32 @@ func (sw *testSw) Wait(ctx context.Context) error {
 }
 
 func TestNewAppClientRunFunc(t *testing.T) {
+	// FIXME: non terminable not checked on server-side
 	port, cancel, err := RunTestServer(func(as AppServer) {
 		as.Catalog().DeclareFunction(
-			FunctionDesc{Name: "TestNewAppClientRunFunc"},
+			FunctionDesc{
+				Name: "TestNewAppClientRunFunc",
+				IStreams: []IStreamDesc{
+					{
+						StreamDesc: StreamDesc{
+							Name:      "in",
+							Discrete:  true,
+							MaxNb:     1,
+							Marshaler: MarshalerJSON,
+						},
+					},
+				},
+				OStreams: []OStreamDesc{
+					{
+						StreamDesc: StreamDesc{
+							Name:      "out",
+							Discrete:  true,
+							MaxNb:     1,
+							Marshaler: MarshalerJSON,
+						},
+					},
+				},
+			},
 			&testSw{},
 			nil,
 		)
@@ -84,12 +107,16 @@ func TestNewAppClientRunFunc(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, ac)
 	time.Sleep(10 * time.Millisecond)
-	os, err := ac.AddIStream("")
+	os, err := ac.AddIStream("out1")
 	require.NoError(t, err)
-	is, err := ac.GetOStream("")
+	is, err := ac.GetOStream("in1")
 	require.NoError(t, err)
 	_, _ = is, os
 	fc, err := ac.NewFunction("TestNewAppClientRunFunc", "")
+	require.NoError(t, err)
+	err = fc.AddOStream(is)
+	require.NoError(t, err)
+	err = fc.AddIStream(os)
 	require.NoError(t, err)
 	err = fc.Run()
 	require.NoError(t, err)
@@ -97,6 +124,10 @@ func TestNewAppClientRunFunc(t *testing.T) {
 	require.NoError(t, err)
 
 	fc, err = ac.NewFunction("TestNewAppClientRunFunc", "")
+	require.NoError(t, err)
+	err = fc.AddOStream(is)
+	require.NoError(t, err)
+	err = fc.AddIStream(os)
 	require.NoError(t, err)
 	err = fc.Start()
 	require.NoError(t, err)

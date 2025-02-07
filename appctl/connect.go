@@ -28,8 +28,8 @@ type Connection interface {
 	AddOStream(id string) (OStream, error)
 	GetIStream(id string) IStream
 	GetOStream(id string) OStream
-	NewFunction(id string, fc stf.Function) error
-	GetFunction(id string) stf.Function
+	NewFunction(id string, fc stf.Function, fd *FunctionDesc) error
+	GetFunction(id string) (stf.Function, *FunctionDesc)
 }
 
 type connection struct {
@@ -44,6 +44,7 @@ type connection struct {
 	iss          map[string]IStream
 	oss          map[string]OStream
 	funcs        map[string]stf.Function
+	fds          map[string]*FunctionDesc
 	logger       *slog.Logger
 }
 
@@ -58,6 +59,7 @@ func NewConnection(ctx context.Context, qc quic.Connection, id string, isQuicSer
 		iss:          make(map[string]IStream),
 		oss:          make(map[string]OStream),
 		funcs:        make(map[string]stf.Function),
+		fds:          make(map[string]*FunctionDesc),
 		logger:       logger.With("connId", id),
 	}
 	cn.ctx = context.WithValue(ctx, "cn", cn)
@@ -152,11 +154,11 @@ func (c *connection) GetSyncStream() IOStream {
 
 func (c *connection) AddIStream(id string) (IStream, error) {
 	if id == "" {
-		prefix := "in"
-		if !c.isAppServer {
-			prefix = "out"
+		if c.isAppServer {
+			id = NextId("/in")
+		} else {
+			id = NextId("/out")
 		}
-		id = NextId("/" + c.id + "/" + prefix)
 	}
 	c.mmux.Lock()
 	defer c.mmux.Unlock()
@@ -174,11 +176,11 @@ func (c *connection) AddIStream(id string) (IStream, error) {
 
 func (c *connection) AddOStream(id string) (OStream, error) {
 	if id == "" {
-		prefix := "out"
-		if !c.isAppServer {
-			prefix = "in"
+		if c.isAppServer {
+			id = NextId("/out")
+		} else {
+			id = NextId("/in")
 		}
-		id = NextId("/" + c.id + "/" + prefix)
 	}
 	c.mmux.Lock()
 	defer c.mmux.Unlock()
@@ -204,7 +206,7 @@ func (c *connection) GetOStream(id string) OStream {
 	return os
 }
 
-func (c *connection) NewFunction(id string, fc stf.Function) error {
+func (c *connection) NewFunction(id string, fc stf.Function, fd *FunctionDesc) error {
 	c.mmux.Lock()
 	defer c.mmux.Unlock()
 	_, ok := c.funcs[id]
@@ -213,10 +215,12 @@ func (c *connection) NewFunction(id string, fc stf.Function) error {
 	}
 	c.logger.Info("new function", "id", id)
 	c.funcs[id] = fc
+	c.fds[id] = fd
 	return nil
 }
 
-func (c *connection) GetFunction(id string) stf.Function {
+func (c *connection) GetFunction(id string) (stf.Function, *FunctionDesc) {
 	fc, _ := c.funcs[id]
-	return fc
+	fd, _ := c.fds[id]
+	return fc, fd
 }
