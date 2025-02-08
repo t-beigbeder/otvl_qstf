@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/stretchr/testify/require"
 	"github.com/t-beigbeder/otvl_qstf/stf"
+	os2 "os"
 	"testing"
 	"time"
 )
@@ -55,20 +56,20 @@ type testSw struct {
 }
 
 func (sw *testSw) Start(ctx context.Context) error {
-	acn := ctx.Value("cn")
-	cn := acn.(Connection)
-	if cn != nil {
-		cn.GetLogger().Debug("testSw Start")
-	}
+	cn := CurrentConnection(ctx)
+	cn.GetLogger().Debug("testSw Start", "cn", cn.GetId())
+	fc := CurrentFunction(ctx)
+	cn.GetLogger().Debug("testSw Start", "fc", fc.Options())
+	fc.GetInStreams()[0].Start()
+	fc.GetOutStreams()[0].Start()
 	return nil
 }
 
 func (sw *testSw) Wait(ctx context.Context) error {
-	acn := ctx.Value("cn")
-	cn := acn.(Connection)
-	if cn != nil {
-		cn.GetLogger().Debug("testSw Wait")
-	}
+	cn := CurrentConnection(ctx)
+	cn.GetLogger().Debug("testSw Wait", "cn", cn.GetId())
+	fc := CurrentFunction(ctx)
+	cn.GetLogger().Debug("testSw Wait", "fc", fc.Options())
 	return nil
 }
 
@@ -152,6 +153,16 @@ func TestNewAppClientRunFunc(t *testing.T) {
 	require.NoError(t, err)
 	err = fc.AddIStream(is)
 	require.NoError(t, err)
+
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		_, err := os.Write([]byte("hello world"))
+		if err != nil {
+			fmt.Fprintf(os2.Stderr, "os.Write: %s\n", err)
+			return
+		}
+	}()
+
 	err = fc.Run()
 	require.NoError(t, err)
 	err = fc.Terminate()

@@ -28,8 +28,8 @@ type Connection interface {
 	AddOStream(id string) (OStream, error)
 	GetIStream(id string) IStream
 	GetOStream(id string) OStream
-	NewFunction(id string, fc stf.Function, fd *FunctionDesc) error
-	GetFunction(id string) (stf.Function, *FunctionDesc)
+	NewFunction(id string, fc stf.Function, fd *FunctionDesc, sths *StreamHandlers) error
+	GetFunction(id string) (stf.Function, *FunctionDesc, *StreamHandlers)
 }
 
 type connection struct {
@@ -45,6 +45,7 @@ type connection struct {
 	oss          map[string]OStream
 	funcs        map[string]stf.Function
 	fds          map[string]*FunctionDesc
+	sthss        map[string]*StreamHandlers
 	logger       *slog.Logger
 }
 
@@ -60,6 +61,7 @@ func NewConnection(ctx context.Context, qc quic.Connection, id string, isQuicSer
 		oss:          make(map[string]OStream),
 		funcs:        make(map[string]stf.Function),
 		fds:          make(map[string]*FunctionDesc),
+		sthss:        make(map[string]*StreamHandlers),
 		logger:       logger.With("connId", id),
 	}
 	cn.ctx = context.WithValue(ctx, "cn", cn)
@@ -196,7 +198,7 @@ func (c *connection) GetOStream(id string) OStream {
 	return os
 }
 
-func (c *connection) NewFunction(id string, fc stf.Function, fd *FunctionDesc) error {
+func (c *connection) NewFunction(id string, fc stf.Function, fd *FunctionDesc, sths *StreamHandlers) error {
 	c.mmux.Lock()
 	defer c.mmux.Unlock()
 	_, ok := c.funcs[id]
@@ -206,11 +208,39 @@ func (c *connection) NewFunction(id string, fc stf.Function, fd *FunctionDesc) e
 	c.logger.Info("new function", "id", id)
 	c.funcs[id] = fc
 	c.fds[id] = fd
+	c.sthss[id] = sths
 	return nil
 }
 
-func (c *connection) GetFunction(id string) (stf.Function, *FunctionDesc) {
+func (c *connection) GetFunction(id string) (stf.Function, *FunctionDesc, *StreamHandlers) {
 	fc, _ := c.funcs[id]
 	fd, _ := c.fds[id]
-	return fc, fd
+	sths, _ := c.sthss[id]
+	return fc, fd, sths
+}
+
+func CurrentConnection(ctx context.Context) Connection {
+	if ctx.Value("cn") == nil {
+		return nil
+	}
+	cn, ok := ctx.Value("cn").(Connection)
+	if !ok {
+		return nil
+	}
+	return cn
+}
+
+func CurrentFunction(ctx context.Context) stf.Function {
+	if ctx.Value("values") == nil {
+		return nil
+	}
+	values, ok := ctx.Value("values").(map[string]any)
+	if !ok {
+		return nil
+	}
+	fc, ok := values["fc"].(stf.Function)
+	if !ok {
+		return nil
+	}
+	return fc
 }

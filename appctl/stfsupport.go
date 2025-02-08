@@ -27,7 +27,7 @@ func DeclareStfsNewFunction(cat *FunctionCatalog) error {
 					res.Error = fmt.Sprintf("Function %s cannot be run as connection is unknown", req.Name)
 					return res
 				}
-				fd, sw, wf, _, err := cat.GetFunction(req.Name)
+				fd, sw, wf, sths, err := cat.GetFunction(req.Name)
 				if err != nil {
 					res.Error = err.Error()
 					return res
@@ -45,14 +45,14 @@ func DeclareStfsNewFunction(cat *FunctionCatalog) error {
 					opts = append(opts, stf.FcTerminable(true))
 				}
 				values := make(map[string]any)
-				fcCtx := context.WithValue(ctx, "values", make(map[string]any))
+				fcCtx := context.WithValue(ctx, "values", values)
 				fc, err := stf.NewFunction(fcCtx, sw, opts...)
 				if err != nil {
 					res.Error = err.Error()
 					return res
 				}
 				values["fc"] = fc
-				err = cn.NewFunction(req.Id, fc, fd)
+				err = cn.NewFunction(req.Id, fc, fd, sths)
 				res.Desc = *fd
 				return res
 			},
@@ -81,7 +81,8 @@ func DeclareStfsFuncAddIStream(cat *FunctionCatalog) error {
 					res.Error = fmt.Sprintf("Function %s stream %s cannot be added as connection is unknown", req.FcId, req.StId)
 					return res
 				}
-				fc, fd := cn.GetFunction(req.FcId)
+				fc, fd, sths := cn.GetFunction(req.FcId)
+				_ = sths
 				if fc == nil || fd == nil {
 					res.Error = fmt.Sprintf("Function %s does not exist", req.FcId)
 					return res
@@ -138,7 +139,8 @@ func DeclareStfsFuncAddOStream(cat *FunctionCatalog) error {
 					res.Error = fmt.Sprintf("Function %s stream %s cannot be added as connection is unknown", req.FcId, req.StId)
 					return res
 				}
-				fc, fd := cn.GetFunction(req.FcId)
+				fc, fd, sths := cn.GetFunction(req.FcId)
+				_ = sths
 				if fc == nil || fd == nil {
 					res.Error = fmt.Sprintf("Function %s does not exist", req.FcId)
 					return res
@@ -190,7 +192,8 @@ func getWrappedFuncOperate(fName string, verb string, doer func(stf.Function) er
 				res.Error = fmt.Sprintf("Function %s cannot be %s as connection is unknown", req.Id, verb)
 				return res
 			}
-			fc, fd := cn.GetFunction(req.Id)
+			fc, fd, sths := cn.GetFunction(req.Id)
+			_ = sths
 			if fc == nil || fd == nil {
 				res.Error = fmt.Sprintf("Function %s does not exist", req.Id)
 				return res
