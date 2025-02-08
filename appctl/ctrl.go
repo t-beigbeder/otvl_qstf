@@ -29,6 +29,7 @@ const (
 	CmdAddIStream       = "AddIStream"
 	CmdAddOStream       = "AddOStream"
 	CmdRunSyncFunction  = "RunSyncFunction"
+	CmdAddFuncIOStream  = "AddFuncIOStream"
 	FNameNewFunction    = "/stf/NewFunction"
 	FNameFuncAddIStream = "/stf/FuncAddIStream"
 	FNameFuncAddOStream = "/stf/FuncAddOStream"
@@ -44,6 +45,7 @@ type CtrlReqMsg struct {
 	Command  string `json:"command"`
 	StreamId string `json:"streamId,omitempty"`
 	FName    string `json:"fName,omitempty"`
+	FuncId   string `json:"funcId,omitempty"`
 }
 
 type CtrlRspMsg struct {

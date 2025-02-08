@@ -110,10 +110,12 @@ type appClient struct {
 
 var _ AppClient = &appClient{}
 
-func (ac *appClient) reqRoundTrip(cmd string, stId, funcId string, subProcess func(*appClient) error) error {
-	ac.ctlMux.Lock()
-	defer ac.ctlMux.Unlock()
-	crqm := CtrlReqMsg{Command: cmd, StreamId: stId, FName: funcId}
+func (ac *appClient) reqRoundTrip(cmd string, stId, fName, funcId string, noLock bool, subProcess func(*appClient) error) error {
+	if !noLock {
+		ac.ctlMux.Lock()
+		defer ac.ctlMux.Unlock()
+	}
+	crqm := CtrlReqMsg{Command: cmd, StreamId: stId, FName: fName, FuncId: funcId}
 	bs, err := json.Marshal(crqm)
 	if err != nil {
 		return err
@@ -157,7 +159,7 @@ func (ac *appClient) AddIStream(id string) (OStream, error) {
 		id = NextId("out")
 	}
 	var os OStream
-	err := ac.reqRoundTrip(CmdAddOStream, id, "", func(client *appClient) error {
+	err := ac.reqRoundTrip(CmdAddOStream, id, "", "", false, func(client *appClient) error {
 		var iErr error
 		os, iErr = client.cnc.AddOStream(id)
 		return iErr
@@ -170,7 +172,7 @@ func (ac *appClient) GetOStream(id string) (IStream, error) {
 		id = NextId("in")
 	}
 	var is IStream
-	err := ac.reqRoundTrip(CmdAddIStream, id, "", func(client *appClient) error {
+	err := ac.reqRoundTrip(CmdAddIStream, id, "", "", false, func(client *appClient) error {
 		var iErr error
 		is, iErr = client.cnc.AddIStream(id)
 		return iErr
@@ -178,11 +180,21 @@ func (ac *appClient) GetOStream(id string) (IStream, error) {
 	return is, err
 }
 
+func (ac *appClient) AddFuncCtrlStream(funcId string) (IOStream, error) {
+	var ios IOStream
+	stId := fmt.Sprintf("%s/control", funcId)
+	err := ac.reqRoundTrip(CmdAddFuncIOStream, stId, "", funcId, true, func(client *appClient) error {
+		var iErr error
+		ios, iErr = client.cnc.AddFuncCtrlStream(stId)
+		return iErr
+	})
+	return ios, err
+}
+
 func (ac *appClient) RunSyncFunction(fName string, in any, out any) error {
+	funcId := NextId(fmt.Sprintf("/%s/fc", fName))
 	err := ac.reqRoundTrip(
-		CmdRunSyncFunction,
-		"",
-		fName,
+		CmdRunSyncFunction, "", fName, funcId, false,
 		func(client *appClient) error {
 			bs, err := json.Marshal(in)
 			if err != nil {
@@ -234,7 +246,7 @@ func (ac *appClient) NewFunction(fName string, id string) (FcClient, error) {
 	}
 	var ctrlStream IOStream
 	if rsp.Desc.Terminable {
-		ctrlStream, err = ac.cnc.AddFuncCtrlStream(id)
+		ctrlStream, err = ac.AddFuncCtrlStream(id)
 		if err != nil {
 			return nil, err
 		}

@@ -157,8 +157,7 @@ func (c *connection) GetSyncStream() IOStream {
 	return c.syncStream
 }
 
-func (c *connection) AddFuncCtrlStream(fcId string) (IOStream, error) {
-	stId := fmt.Sprintf("control-%s", fcId)
+func (c *connection) AddFuncCtrlStream(stId string) (IOStream, error) {
 	qst, read, written, err := c.makeQStream(stId, c.isAppServer)
 	if err != nil {
 		return nil, err

@@ -18,8 +18,8 @@ type AppServerCnc interface {
 	Close(error) error
 	AddIStream(id string) error
 	GetOStream(id string) error
-	GetFunction(id string, iss []IStream, oss []OStream) (FcServer, error)
-	RunFunction(funcId string) error
+	AddFuncIOStream(id string) error
+	RunSyncFunction(funcId string) error
 	GetLogger() *slog.Logger
 }
 
@@ -52,8 +52,10 @@ func (ac *appServerCnc) Handle() error {
 		return ac.AddIStream(crqm.StreamId)
 	case CmdAddOStream:
 		return ac.GetOStream(crqm.StreamId)
+	case CmdAddFuncIOStream:
+		return ac.AddFuncIOStream(crqm.StreamId)
 	case CmdRunSyncFunction:
-		return ac.RunFunction(crqm.FName)
+		return ac.RunSyncFunction(crqm.FName)
 	default:
 		return fmt.Errorf("unknown command: %s", crqm.Command)
 	}
@@ -110,12 +112,14 @@ func (ac *appServerCnc) GetOStream(id string) error {
 	})
 }
 
-func (ac *appServerCnc) GetFunction(id string, iss []IStream, oss []OStream) (FcServer, error) {
-	//TODO implement me
-	panic("implement me")
+func (ac *appServerCnc) AddFuncIOStream(id string) error {
+	return ac.runAndResp(func(asc *appServerCnc) error {
+		_, err := asc.cnc.AddFuncCtrlStream(id)
+		return err
+	})
 }
 
-func (ac *appServerCnc) RunFunction(fName string) error {
+func (ac *appServerCnc) RunSyncFunction(fName string) error {
 	_, _, wf, _, err := ac.cat.GetFunction(fName)
 	if err != nil {
 		return err
