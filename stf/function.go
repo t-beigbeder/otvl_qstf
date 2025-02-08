@@ -2,6 +2,8 @@ package stf
 
 import (
 	"context"
+	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -35,6 +37,7 @@ type Function interface {
 	GetOutStream(string) OutStream
 	GetInStreams() []InStream
 	GetOutStreams() []OutStream
+	AddCtrlStream(io.ReadWriter) error
 	Run() error
 	Start() error
 	Wait() error
@@ -62,6 +65,7 @@ type function struct {
 	outs       map[string]*outStream
 	inList     []*inStream
 	outList    []*outStream
+	ctrlStream io.ReadWriter
 	wg         sync.WaitGroup
 }
 
@@ -119,6 +123,11 @@ func (fc *function) GetOutStreams() []OutStream {
 		res = append(res, out)
 	}
 	return res
+}
+
+func (fc *function) AddCtrlStream(rw io.ReadWriter) error {
+	fc.ctrlStream = rw
+	return nil
 }
 
 func (fc *function) activateStream(st *stream, sti Stream) {
@@ -192,6 +201,23 @@ func (fc *function) AddOutStream(wr io.Writer, opts ...OstOption) (OutStream, er
 	return os, nil
 }
 
+func (fc *function) handleCtrlStream() error {
+	stream := fc.ctrlStream
+	bs := make([]byte, 4)
+	if _, err := io.ReadFull(stream, bs); err != nil {
+		return err
+	}
+	bln := binary.BigEndian.Uint32(bs)
+	if bln > 128 {
+		return fmt.Errorf("request too large (%d > %d)", bln, 128)
+	}
+	bs = make([]byte, bln)
+	if _, err := io.ReadFull(stream, bs); err != nil {
+		return err
+	}
+	//	return ac.WaitTermFunc(crqm.FuncId)
+}
+
 func (fc *function) Start() error {
 	fc.mux.Lock()
 	defer fc.mux.Unlock()
@@ -206,8 +232,8 @@ func (fc *function) Start() error {
 		return nil
 	}
 
-	fc.wg.Add(1)
 	fc.ctrChan = make(chan struct{}, 1)
+	fc.wg.Add(2)
 	go func() {
 		defer fc.wg.Done()
 		for {
@@ -221,6 +247,17 @@ func (fc *function) Start() error {
 				}
 				fc.setState(StateFinished, nil)
 				return
+			}
+		}
+	}()
+	go func() {
+		defer fc.wg.Done()
+		for {
+			select {
+			case <-fc.ctrChan:
+				return
+			default:
+				fc.handleCtrlStream()
 			}
 		}
 	}()

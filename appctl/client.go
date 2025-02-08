@@ -22,6 +22,7 @@ type FcClient interface {
 	Start() error
 	Wait() error
 	Terminate() error
+	GetCtrlStream() IOStream
 }
 
 type fcClient struct {
@@ -86,11 +87,15 @@ func (fc *fcClient) Wait() error {
 	if !fc.desc.Terminable {
 		return fc.fcOperate(FNameFuncWait)
 	}
-	return errors.New("Wait on terminable is not yet implemented")
+	return fc.ac.WaitTermFunc(fc.id)
 }
 
 func (fc *fcClient) Terminate() error {
 	return fc.fcOperate(FNameFuncTerminate)
+}
+
+func (fc *fcClient) GetCtrlStream() IOStream {
+	return fc.ctrlStream
 }
 
 type AppClient interface {
@@ -126,6 +131,13 @@ func (ac *appClient) reqRoundTrip(cmd string, stId, fName, funcId string, noLock
 	binary.BigEndian.PutUint32(wbs, uint32(len(bs)))
 	copy(wbs[4:], bs)
 	stream := ac.cnc.GetCtrlStream()
+	if cmd == CmdWaitTermFunc {
+		fcc := ac.GetFunction(funcId)
+		if fcc == nil {
+			return fmt.Errorf("no such function id %s", funcId)
+		}
+		stream = fcc.GetCtrlStream()
+	}
 	if _, err = stream.Write(wbs); err != nil {
 		return err
 	}
@@ -195,7 +207,7 @@ func (ac *appClient) AddFuncCtrlStream(funcId string) (IOStream, error) {
 
 func (ac *appClient) WaitTermFunc(funcId string) error {
 	err := ac.reqRoundTrip(CmdWaitTermFunc, "", "", funcId, false, func(client *appClient) error {
-
+		return nil
 	})
 	return err
 }

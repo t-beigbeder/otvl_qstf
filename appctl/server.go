@@ -18,7 +18,8 @@ type AppServerCnc interface {
 	Close(error) error
 	AddIStream(id string) error
 	GetOStream(id string) error
-	AddFuncIOStream(id string) error
+	AddFuncIOStream(stId, fcId string) error
+	WaitTermFunc(id string) error
 	RunSyncFunction(funcId string) error
 	GetLogger() *slog.Logger
 }
@@ -53,7 +54,10 @@ func (ac *appServerCnc) Handle() error {
 	case CmdAddOStream:
 		return ac.GetOStream(crqm.StreamId)
 	case CmdAddFuncIOStream:
-		return ac.AddFuncIOStream(crqm.StreamId)
+		return ac.AddFuncIOStream(crqm.StreamId, crqm.FuncId)
+	// FIXME: move in appropriate "handler"
+	//case CmdWaitTermFunc:
+	//	return ac.WaitTermFunc(crqm.FuncId)
 	case CmdRunSyncFunction:
 		return ac.RunSyncFunction(crqm.FName)
 	default:
@@ -112,11 +116,27 @@ func (ac *appServerCnc) GetOStream(id string) error {
 	})
 }
 
-func (ac *appServerCnc) AddFuncIOStream(id string) error {
+func (ac *appServerCnc) AddFuncIOStream(stId, fcId string) error {
 	return ac.runAndResp(func(asc *appServerCnc) error {
-		_, err := asc.cnc.AddFuncCtrlStream(id)
+		fc, _, _ := ac.cnc.GetFunction(fcId)
+		if fc == nil {
+			return fmt.Errorf("function id %s not found", fcId)
+		}
+		ios, err := asc.cnc.AddFuncCtrlStream(stId)
+		if err != nil {
+			return err
+		}
+		err = fc.AddCtrlStream(ios)
 		return err
 	})
+}
+
+func (ac *appServerCnc) WaitTermFunc(id string) error {
+	fc, _, _ := ac.cnc.GetFunction(id)
+	if fc == nil {
+		return fmt.Errorf("function id %s not found", id)
+	}
+	return fc.Wait()
 }
 
 func (ac *appServerCnc) RunSyncFunction(fName string) error {
