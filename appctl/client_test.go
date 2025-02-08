@@ -72,7 +72,7 @@ func (sw *testSw) Wait(ctx context.Context) error {
 	return nil
 }
 
-func getTestSwSths() *StreamHandlers {
+func getTestSwSthsJson() *StreamHandlers {
 	return &StreamHandlers{
 		ihs: []IStreamHandler{
 			{
@@ -136,7 +136,123 @@ func getTestSwSths() *StreamHandlers {
 	}
 }
 
-func TestNewAppClientRunFunc(t *testing.T) {
+func getTestSwSthsRaw() *StreamHandlers {
+	return &StreamHandlers{
+		ihs: []IStreamHandler{
+			{
+				BSet: func(ctx context.Context, bytes []byte) error {
+					CurrentLogger(ctx).Debug("getTestSwSths bset", "bytes", bytes)
+					vls := CurrentValues(ctx)
+					if vls == nil {
+						return errors.New("no values")
+					}
+					vls["a"] = string(bytes)
+					oss := CurrentFunction(ctx).GetOutStreams()
+					oss[len(oss)-1].Start()
+					return nil
+				},
+			},
+		},
+		ohs: []OStreamHandler{
+			{
+				BGet: func(ctx context.Context) ([]byte, error) {
+					CurrentLogger(ctx).Debug("getTestSwSths bget")
+					vls := CurrentValues(ctx)
+					if vls == nil {
+						return nil, errors.New("no values")
+					}
+					a, ok := vls["a"]
+					if !ok {
+						return nil, errors.New("no values")
+					}
+					CurrentLogger(ctx).Debug("getTestSwSths bget", "a", a)
+					return []byte(fmt.Sprintf("response to %s", a)), nil
+				},
+			},
+		},
+	}
+}
+
+func TestNewAppClientRunNTermFunc(t *testing.T) {
+	port, cancel, err := RunTestServer(func(as AppServer) {
+		err := as.Catalog().DeclareFunction(
+			FunctionDesc{
+				Name:       "TestNewAppClientRunNTermFunc",
+				Terminable: false,
+				IStreams: []IStreamDesc{
+					{
+						StreamDesc: StreamDesc{
+							Name:     "in",
+							Discrete: true,
+							MaxNb:    1,
+						},
+					},
+				},
+				OStreams: []OStreamDesc{
+					{
+						StreamDesc: StreamDesc{
+							Name:     "out",
+							Discrete: true,
+							MaxNb:    1,
+						},
+					},
+				},
+			},
+			nil,
+			&testSw{},
+			getTestSwSthsRaw(),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+	})
+	require.NoError(t, err)
+	ac, err := NewAppClient(context.Background(), "localhost:"+port, GetLoggerFor("client"))
+	require.NoError(t, err)
+	require.NotNil(t, ac)
+	time.Sleep(10 * time.Millisecond)
+	os, err := ac.AddIStream("")
+	require.NoError(t, err)
+	is, err := ac.GetOStream("")
+	require.NoError(t, err)
+	_, _ = is, os
+	fc, err := ac.NewFunction("TestNewAppClientRunNTermFunc", "")
+	require.NoError(t, err)
+	err = fc.AddOStream(os)
+	require.NoError(t, err)
+	err = fc.AddIStream(is)
+	require.NoError(t, err)
+
+	go func() {
+		js, err := toJsonBytes("hello world TestNewAppClientRunNTermFunc")
+		if err != nil {
+			fmt.Fprintf(os2.Stderr, "toJsonBytes: %s\n", err)
+			return
+		}
+		_, err = os.Write(js)
+		if err != nil {
+			fmt.Fprintf(os2.Stderr, "os.Write: %s\n", err)
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+
+		bs, err := fromBytes(is)
+		if err != nil {
+			fmt.Fprintf(os2.Stderr, "fromBytes: %s\n", err)
+			return
+		}
+		fmt.Fprintf(os2.Stderr, "fromBytes: %s\n", string(bs))
+
+	}()
+
+	err = fc.Run()
+	require.NoError(t, err)
+	time.Sleep(100 * time.Millisecond)
+
+	cancel()
+}
+
+func TestNewAppClientRunTermFunc(t *testing.T) {
 	port, cancel, err := RunTestServer(func(as AppServer) {
 		err := as.Catalog().DeclareFunction(
 			FunctionDesc{
@@ -163,7 +279,7 @@ func TestNewAppClientRunFunc(t *testing.T) {
 			},
 			nil,
 			&testSw{},
-			getTestSwSths(),
+			getTestSwSthsJson(),
 		)
 		if err != nil {
 			t.Fatal(err)
@@ -217,6 +333,7 @@ func TestNewAppClientRunFunc(t *testing.T) {
 		fc.Terminate()
 	}()
 
+	time.Sleep(100 * time.Millisecond)
 	err = fc.Run()
 	require.NoError(t, err)
 	err = fc.Terminate()

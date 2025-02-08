@@ -25,9 +25,10 @@ type FcClient interface {
 }
 
 type fcClient struct {
-	ac   *appClient
-	desc *FunctionDesc
-	id   string
+	ac         *appClient
+	desc       *FunctionDesc
+	id         string
+	ctrlStream IOStream
 }
 
 func (fc *fcClient) GetDesc() *FunctionDesc {
@@ -82,7 +83,10 @@ func (fc *fcClient) Start() error {
 }
 
 func (fc *fcClient) Wait() error {
-	return fc.fcOperate(FNameFuncWait)
+	if !fc.desc.Terminable {
+		return fc.fcOperate(FNameFuncWait)
+	}
+	return errors.New("Wait on terminable is not yet implemented")
 }
 
 func (fc *fcClient) Terminate() error {
@@ -228,7 +232,14 @@ func (ac *appClient) NewFunction(fName string, id string) (FcClient, error) {
 	if rsp.Error != "" {
 		return nil, errors.New(rsp.Error)
 	}
-	fc := &fcClient{ac, &(rsp.Desc), id}
+	var ctrlStream IOStream
+	if rsp.Desc.Terminable {
+		ctrlStream, err = ac.cnc.AddFuncCtrlStream(id)
+		if err != nil {
+			return nil, err
+		}
+	}
+	fc := &fcClient{ac, &(rsp.Desc), id, ctrlStream}
 	ac.funcs[id] = fc
 	return fc, nil
 }

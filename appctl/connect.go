@@ -24,6 +24,7 @@ type Connection interface {
 	GetCtrlStream() IOStream
 	SetSyncStream() error
 	GetSyncStream() IOStream
+	AddFuncCtrlStream(string) (IOStream, error)
 	AddIStream(id string) (IStream, error)
 	AddOStream(id string) (OStream, error)
 	GetIStream(id string) IStream
@@ -154,6 +155,15 @@ func (c *connection) SetSyncStream() (err error) {
 
 func (c *connection) GetSyncStream() IOStream {
 	return c.syncStream
+}
+
+func (c *connection) AddFuncCtrlStream(fcId string) (IOStream, error) {
+	stId := fmt.Sprintf("control-%s", fcId)
+	qst, read, written, err := c.makeQStream(stId, c.isAppServer)
+	if err != nil {
+		return nil, err
+	}
+	return NewIOStream(stId, qst, read, written), nil
 }
 
 func (c *connection) AddIStream(id string) (IStream, error) {
