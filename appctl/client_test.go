@@ -61,7 +61,6 @@ func (sw *testSw) Start(ctx context.Context) error {
 	fc := CurrentFunction(ctx)
 	cn.GetLogger().Debug("testSw Start", "fc", fc.Options())
 	fc.GetInStreams()[0].Start()
-	fc.GetOutStreams()[0].Start()
 	return nil
 }
 
@@ -78,7 +77,12 @@ func getTestSwSths() *StreamHandlers {
 		ihs: []IStreamHandler{
 			{
 				BSet: func(ctx context.Context, bytes []byte) error {
-					return errors.New("not implemented")
+					CurrentLogger(ctx).Debug("getTestSwSths bset", "bytes", bytes)
+					vls := CurrentValues(ctx)
+					if vls == nil {
+						return errors.New("no values")
+					}
+					return nil
 				},
 				Unmarshal: json.Unmarshal,
 				NewASet: func() any {
@@ -86,17 +90,45 @@ func getTestSwSths() *StreamHandlers {
 					return &v
 				},
 				ASet: func(ctx context.Context, a any) error {
-					return errors.New("not implemented")
+					CurrentLogger(ctx).Debug("getTestSwSths aset", "a", *(a.(*string)))
+					vls := CurrentValues(ctx)
+					if vls == nil {
+						return errors.New("no values")
+					}
+					vls["a"] = *(a.(*string))
+					oss := CurrentFunction(ctx).GetOutStreams()
+					oss[len(oss)-1].Start()
+					return nil
 				},
 			},
 		},
 		ohs: []OStreamHandler{
 			{
 				BGet: func(ctx context.Context) ([]byte, error) {
-					return nil, errors.New("not implemented")
+					CurrentLogger(ctx).Debug("getTestSwSths bget")
+					vls := CurrentValues(ctx)
+					if vls == nil {
+						return nil, errors.New("no values")
+					}
+					a, ok := vls["a"]
+					if !ok {
+						return nil, errors.New("no values")
+					}
+					CurrentLogger(ctx).Debug("getTestSwSths bget", "a", a)
+					return []byte(fmt.Sprintf("response to %s", a)), nil
 				},
 				AGet: func(ctx context.Context) (any, error) {
-					return nil, errors.New("not implemented")
+					CurrentLogger(ctx).Debug("getTestSwSths aget")
+					vls := CurrentValues(ctx)
+					if vls == nil {
+						return nil, errors.New("no values")
+					}
+					a, ok := vls["a"]
+					if !ok {
+						return nil, errors.New("no values")
+					}
+					CurrentLogger(ctx).Debug("getTestSwSths aget", "a", a)
+					return fmt.Sprintf("response to %s", a), nil
 				},
 				Marshaller: json.Marshal,
 			},
@@ -155,12 +187,34 @@ func TestNewAppClientRunFunc(t *testing.T) {
 	require.NoError(t, err)
 
 	go func() {
-		time.Sleep(100 * time.Millisecond)
-		_, err := os.Write([]byte("hello world"))
+		js, err := toJsonBytes("hello world")
+		if err != nil {
+			fmt.Fprintf(os2.Stderr, "toJsonBytes: %s\n", err)
+			return
+		}
+		_, err = os.Write(js)
 		if err != nil {
 			fmt.Fprintf(os2.Stderr, "os.Write: %s\n", err)
 			return
 		}
+		time.Sleep(100 * time.Millisecond)
+
+		//bs, err := fromBytes(is)
+		//if err != nil {
+		//	fmt.Fprintf(os2.Stderr, "fromJsonBytes: %s\n", err)
+		//	return
+		//}
+		//fmt.Fprintf(os2.Stderr, "fromJsonBytes: %s\n", string(bs))
+
+		res := ""
+		err = fromJsonBytes(is, &res)
+		if err != nil {
+			fmt.Fprintf(os2.Stderr, "fromJsonBytes: %s\n", err)
+			return
+		}
+		fmt.Fprintf(os2.Stderr, "fromJsonBytes: %s\n", res)
+
+		fc.Terminate()
 	}()
 
 	err = fc.Run()

@@ -71,7 +71,10 @@ func (fc *fcClient) fcOperate(fName string) error {
 }
 
 func (fc *fcClient) Run() error {
-	return fc.fcOperate(FNameFuncRun)
+	if err := fc.Start(); err != nil {
+		return err
+	}
+	return fc.Wait()
 }
 
 func (fc *fcClient) Start() error {

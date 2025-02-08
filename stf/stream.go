@@ -108,6 +108,9 @@ func (st *stream) loop(sti Stream) {
 				st.state = StRunning
 				lo := sti.looper()
 				if lo != loNil {
+					if lo.err != nil {
+						st.err = lo.err
+					}
 					st.state = StTerminated
 					return
 				}
@@ -181,16 +184,16 @@ func (is *inStream) readDiscrete() looperOut {
 	is.read += read
 	if read != 0 && is.opts.BSet != nil {
 		if iErr := is.opts.BSet(is.ctx, bs[:read]); iErr != nil {
-			return looperOut{err: err}
+			return looperOut{err: iErr}
 		}
 	}
 	if is.opts.Unmarshaller != nil {
 		v := is.opts.NewASet()
 		if iErr := is.opts.Unmarshaller(bs[:read], v); iErr != nil {
-			return looperOut{err: err}
+			return looperOut{err: iErr}
 		}
 		if iErr := is.opts.ASet(is.ctx, v); iErr != nil {
-			return looperOut{err: err}
+			return looperOut{err: iErr}
 		}
 	}
 	is.discreteCount++

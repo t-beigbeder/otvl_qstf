@@ -230,6 +230,17 @@ func CurrentConnection(ctx context.Context) Connection {
 	return cn
 }
 
+func CurrentValues(ctx context.Context) map[string]any {
+	if ctx.Value("values") == nil {
+		return nil
+	}
+	values, ok := ctx.Value("values").(map[string]any)
+	if !ok {
+		return nil
+	}
+	return values
+}
+
 func CurrentFunction(ctx context.Context) stf.Function {
 	if ctx.Value("values") == nil {
 		return nil
@@ -243,4 +254,12 @@ func CurrentFunction(ctx context.Context) stf.Function {
 		return nil
 	}
 	return fc
+}
+
+func CurrentLogger(ctx context.Context) *slog.Logger {
+	cn := CurrentConnection(ctx)
+	if cn == nil {
+		return nil
+	}
+	return cn.GetLogger()
 }

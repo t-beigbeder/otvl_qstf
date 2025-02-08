@@ -2,7 +2,6 @@ package appctl
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"github.com/t-beigbeder/otvl_qstf/stf"
 )
@@ -82,7 +81,6 @@ func DeclareStfsFuncAddIStream(cat *FunctionCatalog) error {
 					return res
 				}
 				fc, fd, sths := cn.GetFunction(req.FcId)
-				_ = sths
 				if fc == nil || fd == nil {
 					res.Error = fmt.Sprintf("Function %s does not exist", req.FcId)
 					return res
@@ -96,17 +94,16 @@ func DeclareStfsFuncAddIStream(cat *FunctionCatalog) error {
 					res.Error = fmt.Sprintf("Stream in %s has no descriptor", req.StId)
 				}
 				opts := []stf.IstOption{stf.IstName(req.StId)}
-				opts = append(opts, stf.IstDiscrete(true))
-				opts = append(opts,
-					stf.IstASet(json.Unmarshal,
-						func() any {
-							return nil
-						},
-						func(ctx context.Context, a any) error {
-							return nil
-						}),
-				)
-
+				stx := len(fc.GetInStreams())
+				opts = append(opts, stf.IstDiscrete(fd.IStreams[stx].Discrete))
+				opts = append(opts, stf.IstMaxNb(fd.IStreams[stx].MaxNb))
+				isths := sths.ihs[stx]
+				if isths.BSet != nil {
+					opts = append(opts, stf.IstBSet(isths.BSet))
+				}
+				if isths.ASet != nil {
+					opts = append(opts, stf.IstASet(isths.Unmarshal, isths.NewASet, isths.ASet))
+				}
 				_, err := fc.AddInStream(is, opts...)
 				if err != nil {
 					res.Error = err.Error()
@@ -140,7 +137,6 @@ func DeclareStfsFuncAddOStream(cat *FunctionCatalog) error {
 					return res
 				}
 				fc, fd, sths := cn.GetFunction(req.FcId)
-				_ = sths
 				if fc == nil || fd == nil {
 					res.Error = fmt.Sprintf("Function %s does not exist", req.FcId)
 					return res
@@ -154,14 +150,16 @@ func DeclareStfsFuncAddOStream(cat *FunctionCatalog) error {
 					res.Error = fmt.Sprintf("Stream out %s has no descriptor", req.StId)
 				}
 				opts := []stf.OstOption{stf.OstName(req.StId)}
-				opts = append(opts, stf.OstDiscrete(true))
-				opts = append(opts,
-					stf.OstAGet(
-						func(ctx context.Context) (any, error) {
-							return nil, nil
-						},
-						json.Marshal,
-					))
+				stx := len(fc.GetOutStreams())
+				opts = append(opts, stf.OstDiscrete(fd.OStreams[stx].Discrete))
+				opts = append(opts, stf.OstMaxNb(fd.OStreams[stx].MaxNb))
+				osths := sths.ohs[stx]
+				if osths.BGet != nil {
+					opts = append(opts, stf.OstBGet(osths.BGet))
+				}
+				if osths.AGet != nil {
+					opts = append(opts, stf.OstAGet(osths.AGet, osths.Marshaller))
+				}
 				_, err := fc.AddOutStream(os, opts...)
 				if err != nil {
 					res.Error = err.Error()
@@ -192,8 +190,7 @@ func getWrappedFuncOperate(fName string, verb string, doer func(stf.Function) er
 				res.Error = fmt.Sprintf("Function %s cannot be %s as connection is unknown", req.Id, verb)
 				return res
 			}
-			fc, fd, sths := cn.GetFunction(req.Id)
-			_ = sths
+			fc, fd, _ := cn.GetFunction(req.Id)
 			if fc == nil || fd == nil {
 				res.Error = fmt.Sprintf("Function %s does not exist", req.Id)
 				return res
