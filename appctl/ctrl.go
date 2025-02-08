@@ -30,6 +30,7 @@ const (
 	CmdAddOStream       = "AddOStream"
 	CmdRunSyncFunction  = "RunSyncFunction"
 	CmdAddFuncIOStream  = "AddFuncIOStream"
+	CmdWaitTermFunc     = "WaitTermFunc"
 	FNameNewFunction    = "/stf/NewFunction"
 	FNameFuncAddIStream = "/stf/FuncAddIStream"
 	FNameFuncAddOStream = "/stf/FuncAddOStream"

@@ -96,6 +96,8 @@ func (fc *fcClient) Terminate() error {
 type AppClient interface {
 	AddIStream(id string) (OStream, error)
 	GetOStream(id string) (IStream, error)
+	AddFuncCtrlStream(funcId string) (IOStream, error)
+	WaitTermFunc(funcId string) error
 	RunSyncFunction(fName string, in any, out any) error
 	NewFunction(fName string, id string) (FcClient, error)
 	GetFunction(id string) FcClient
@@ -189,6 +191,13 @@ func (ac *appClient) AddFuncCtrlStream(funcId string) (IOStream, error) {
 		return iErr
 	})
 	return ios, err
+}
+
+func (ac *appClient) WaitTermFunc(funcId string) error {
+	err := ac.reqRoundTrip(CmdWaitTermFunc, "", "", funcId, false, func(client *appClient) error {
+
+	})
+	return err
 }
 
 func (ac *appClient) RunSyncFunction(fName string, in any, out any) error {
