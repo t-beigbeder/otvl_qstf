@@ -2,6 +2,8 @@ package appctl
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/stretchr/testify/require"
 	"github.com/t-beigbeder/otvl_qstf/stf"
@@ -24,7 +26,6 @@ func TestNewAppClientRunSync(t *testing.T) {
 	port, cancel, err := RunTestServer(func(as AppServer) {
 		as.Catalog().DeclareFunction(
 			FunctionDesc{Name: "TestNewAppClientBasic"},
-			nil,
 			&stf.WrappedFunction{
 				func() any {
 					a := ""
@@ -33,7 +34,7 @@ func TestNewAppClientRunSync(t *testing.T) {
 				func(ctx context.Context, a any) any {
 					return fmt.Sprintf("TestNewAppClientBasic: %v", a)
 				},
-			})
+			}, nil, nil)
 	})
 	require.NoError(t, err)
 	ac, err := NewAppClient(context.Background(), "localhost:"+port, GetLoggerFor("client"))
@@ -71,52 +72,85 @@ func (sw *testSw) Wait(ctx context.Context) error {
 	return nil
 }
 
+func getTestSwSths() *StreamHandlers {
+	return &StreamHandlers{
+		ihs: []IStreamHandler{
+			{
+				BSet: func(ctx context.Context, bytes []byte) error {
+					return errors.New("not implemented")
+				},
+				Unmarshal: json.Unmarshal,
+				NewASet: func() any {
+					v := ""
+					return &v
+				},
+				ASet: func(ctx context.Context, a any) error {
+					return errors.New("not implemented")
+				},
+			},
+		},
+		ohs: []OStreamHandler{
+			{
+				BGet: func(ctx context.Context) ([]byte, error) {
+					return nil, errors.New("not implemented")
+				},
+				AGet: func(ctx context.Context) (any, error) {
+					return nil, errors.New("not implemented")
+				},
+				Marshaller: json.Marshal,
+			},
+		},
+	}
+}
+
 func TestNewAppClientRunFunc(t *testing.T) {
-	// FIXME: non terminable not checked on server-side
 	port, cancel, err := RunTestServer(func(as AppServer) {
-		as.Catalog().DeclareFunction(
+		err := as.Catalog().DeclareFunction(
 			FunctionDesc{
-				Name: "TestNewAppClientRunFunc",
+				Name:       "TestNewAppClientRunFunc",
+				Terminable: true,
 				IStreams: []IStreamDesc{
 					{
 						StreamDesc: StreamDesc{
-							Name:      "in",
-							Discrete:  true,
-							MaxNb:     1,
-							Marshaler: MarshalerJSON,
+							Name:     "in",
+							Discrete: true,
+							MaxNb:    1,
 						},
 					},
 				},
 				OStreams: []OStreamDesc{
 					{
 						StreamDesc: StreamDesc{
-							Name:      "out",
-							Discrete:  true,
-							MaxNb:     1,
-							Marshaler: MarshalerJSON,
+							Name:     "out",
+							Discrete: true,
+							MaxNb:    1,
 						},
 					},
 				},
 			},
-			&testSw{},
 			nil,
+			&testSw{},
+			getTestSwSths(),
 		)
+		if err != nil {
+			t.Fatal(err)
+		}
 	})
 	require.NoError(t, err)
 	ac, err := NewAppClient(context.Background(), "localhost:"+port, GetLoggerFor("client"))
 	require.NoError(t, err)
 	require.NotNil(t, ac)
 	time.Sleep(10 * time.Millisecond)
-	os, err := ac.AddIStream("out1")
+	os, err := ac.AddIStream("")
 	require.NoError(t, err)
-	is, err := ac.GetOStream("in1")
+	is, err := ac.GetOStream("")
 	require.NoError(t, err)
 	_, _ = is, os
 	fc, err := ac.NewFunction("TestNewAppClientRunFunc", "")
 	require.NoError(t, err)
-	err = fc.AddOStream(is)
+	err = fc.AddOStream(os)
 	require.NoError(t, err)
-	err = fc.AddIStream(os)
+	err = fc.AddIStream(is)
 	require.NoError(t, err)
 	err = fc.Run()
 	require.NoError(t, err)
@@ -125,9 +159,9 @@ func TestNewAppClientRunFunc(t *testing.T) {
 
 	fc, err = ac.NewFunction("TestNewAppClientRunFunc", "")
 	require.NoError(t, err)
-	err = fc.AddOStream(is)
+	err = fc.AddOStream(os)
 	require.NoError(t, err)
-	err = fc.AddIStream(os)
+	err = fc.AddIStream(is)
 	require.NoError(t, err)
 	err = fc.Start()
 	require.NoError(t, err)

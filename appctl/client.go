@@ -16,8 +16,8 @@ import (
 type FcClient interface {
 	GetDesc() *FunctionDesc
 	GetId() string
-	AddIStream(OStream) error
-	AddOStream(IStream) error
+	AddIStream(IStream) error
+	AddOStream(OStream) error
 	Run() error
 	Start() error
 	Wait() error
@@ -50,12 +50,12 @@ func (fc *fcClient) streamAction(fName string, stId string) error {
 	return nil
 }
 
-func (fc *fcClient) AddIStream(os OStream) error {
-	return fc.streamAction(FNameFuncAddIStream, os.Id())
+func (fc *fcClient) AddIStream(is IStream) error {
+	return fc.streamAction(FNameFuncAddIStream, is.Id())
 }
 
-func (fc *fcClient) AddOStream(is IStream) error {
-	return fc.streamAction(FNameFuncAddOStream, is.Id())
+func (fc *fcClient) AddOStream(os OStream) error {
+	return fc.streamAction(FNameFuncAddOStream, os.Id())
 }
 
 func (fc *fcClient) fcOperate(fName string) error {
@@ -146,6 +146,9 @@ func (ac *appClient) reqRoundTrip(cmd string, stId, funcId string, subProcess fu
 }
 
 func (ac *appClient) AddIStream(id string) (OStream, error) {
+	if id == "" {
+		id = NextId("out")
+	}
 	var os OStream
 	err := ac.reqRoundTrip(CmdAddOStream, id, "", func(client *appClient) error {
 		var iErr error
@@ -156,6 +159,9 @@ func (ac *appClient) AddIStream(id string) (OStream, error) {
 }
 
 func (ac *appClient) GetOStream(id string) (IStream, error) {
+	if id == "" {
+		id = NextId("in")
+	}
 	var is IStream
 	err := ac.reqRoundTrip(CmdAddIStream, id, "", func(client *appClient) error {
 		var iErr error

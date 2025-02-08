@@ -132,6 +132,7 @@ func (c *connection) SetCtrlStream() error {
 		return err
 	}
 	c.ctlStream = NewIOStream("control", qst, read, written)
+	c.logger.Debug("set ctrl stream", "id", c.id, "qid", c.ctlStream.Qid())
 	return nil
 }
 
@@ -145,6 +146,7 @@ func (c *connection) SetSyncStream() (err error) {
 		return err
 	}
 	c.syncStream = NewIOStream("sync", qst, read, written)
+	c.logger.Debug("new sync stream", "id", c.id, "qid", c.syncStream.Qid())
 	return nil
 }
 
@@ -153,46 +155,34 @@ func (c *connection) GetSyncStream() IOStream {
 }
 
 func (c *connection) AddIStream(id string) (IStream, error) {
-	if id == "" {
-		if c.isAppServer {
-			id = NextId("/in")
-		} else {
-			id = NextId("/out")
-		}
-	}
 	c.mmux.Lock()
 	defer c.mmux.Unlock()
 	_, ok := c.iss[id]
 	if ok {
-		return nil, fmt.Errorf("stream already exists: %s", id)
+		return nil, fmt.Errorf("istream already exists: %s", id)
 	}
 	qst, read, _, err := c.makeQStream(id, true)
 	if err != nil {
 		return nil, err
 	}
 	c.iss[id] = NewIStream(id, qst, read)
+	c.logger.Debug("new istream created", "id", id, "qid", c.iss[id].Qid())
 	return c.iss[id], nil
 }
 
 func (c *connection) AddOStream(id string) (OStream, error) {
-	if id == "" {
-		if c.isAppServer {
-			id = NextId("/out")
-		} else {
-			id = NextId("/in")
-		}
-	}
 	c.mmux.Lock()
 	defer c.mmux.Unlock()
 	_, ok := c.oss[id]
 	if ok {
-		return nil, fmt.Errorf("stream already exists: %s", id)
+		return nil, fmt.Errorf("ostream already exists: %s", id)
 	}
 	qst, _, written, err := c.makeQStream(id, false)
 	if err != nil {
 		return nil, err
 	}
 	c.oss[id] = NewOStream(id, qst, written)
+	c.logger.Debug("new ostream created", "id", id, "qid", c.oss[id].Qid())
 	return c.oss[id], nil
 }
 

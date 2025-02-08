@@ -116,7 +116,7 @@ func (ac *appServerCnc) GetFunction(id string, iss []IStream, oss []OStream) (Fc
 }
 
 func (ac *appServerCnc) RunFunction(fName string) error {
-	_, _, wf, err := ac.cat.GetFunction(fName)
+	_, _, wf, _, err := ac.cat.GetFunction(fName)
 	if err != nil {
 		return err
 	}

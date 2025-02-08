@@ -9,7 +9,7 @@ import (
 
 func DeclareStfsNewFunction(cat *FunctionCatalog) error {
 	return cat.DeclareFunction(
-		FunctionDesc{Name: FNameNewFunction}, nil,
+		FunctionDesc{Name: FNameNewFunction},
 		&stf.WrappedFunction{
 			func() any {
 				return &NewFunctionReqMsg{}
@@ -27,7 +27,7 @@ func DeclareStfsNewFunction(cat *FunctionCatalog) error {
 					res.Error = fmt.Sprintf("Function %s cannot be run as connection is unknown", req.Name)
 					return res
 				}
-				fd, sw, wf, err := cat.GetFunction(req.Name)
+				fd, sw, wf, _, err := cat.GetFunction(req.Name)
 				if err != nil {
 					res.Error = err.Error()
 					return res
@@ -40,22 +40,30 @@ func DeclareStfsNewFunction(cat *FunctionCatalog) error {
 					res.Error = fmt.Sprintf("Function %s cannot be run as it doesn't have StartWaiter interface defined", fd.Name)
 					return res
 				}
-				fc, err := stf.NewFunction(ctx, sw)
+				opts := []stf.FcOption{stf.FcName(req.Id)}
+				if fd.Terminable {
+					opts = append(opts, stf.FcTerminable(true))
+				}
+				values := make(map[string]any)
+				fcCtx := context.WithValue(ctx, "values", make(map[string]any))
+				fc, err := stf.NewFunction(fcCtx, sw, opts...)
 				if err != nil {
 					res.Error = err.Error()
 					return res
 				}
+				values["fc"] = fc
 				err = cn.NewFunction(req.Id, fc, fd)
 				res.Desc = *fd
 				return res
 			},
 		},
+		nil, nil,
 	)
 }
 
 func DeclareStfsFuncAddIStream(cat *FunctionCatalog) error {
 	return cat.DeclareFunction(
-		FunctionDesc{Name: FNameFuncAddIStream}, nil,
+		FunctionDesc{Name: FNameFuncAddIStream},
 		&stf.WrappedFunction{
 			func() any {
 				return &FuncStreamReqMsg{}
@@ -86,7 +94,7 @@ func DeclareStfsFuncAddIStream(cat *FunctionCatalog) error {
 				if len(fc.GetInStreams()) >= len(fd.IStreams) {
 					res.Error = fmt.Sprintf("Stream in %s has no descriptor", req.StId)
 				}
-				opts := []stf.IstOption{}
+				opts := []stf.IstOption{stf.IstName(req.StId)}
 				opts = append(opts, stf.IstDiscrete(true))
 				opts = append(opts,
 					stf.IstASet(json.Unmarshal,
@@ -106,12 +114,13 @@ func DeclareStfsFuncAddIStream(cat *FunctionCatalog) error {
 				return res
 			},
 		},
+		nil, nil,
 	)
 }
 
 func DeclareStfsFuncAddOStream(cat *FunctionCatalog) error {
 	return cat.DeclareFunction(
-		FunctionDesc{Name: FNameFuncAddOStream}, nil,
+		FunctionDesc{Name: FNameFuncAddOStream},
 		&stf.WrappedFunction{
 			func() any {
 				return &FuncStreamReqMsg{}
@@ -142,7 +151,7 @@ func DeclareStfsFuncAddOStream(cat *FunctionCatalog) error {
 				if len(fc.GetOutStreams()) >= len(fd.OStreams) {
 					res.Error = fmt.Sprintf("Stream out %s has no descriptor", req.StId)
 				}
-				opts := []stf.OstOption{}
+				opts := []stf.OstOption{stf.OstName(req.StId)}
 				opts = append(opts, stf.OstDiscrete(true))
 				opts = append(opts,
 					stf.OstAGet(
@@ -159,6 +168,7 @@ func DeclareStfsFuncAddOStream(cat *FunctionCatalog) error {
 				return res
 			},
 		},
+		nil, nil,
 	)
 }
 
@@ -205,27 +215,31 @@ func getWrappedFuncOperate(fName string, verb string, doer func(stf.Function) er
 
 func DeclareStfsFuncRun(cat *FunctionCatalog) error {
 	return cat.DeclareFunction(
-		FunctionDesc{Name: FNameFuncRun}, nil,
+		FunctionDesc{Name: FNameFuncRun},
 		getWrappedFuncOperate("FuncRun", "run", func(fc stf.Function) error { return fc.Run() }),
+		nil, nil,
 	)
 }
 
 func DeclareStfsFuncStart(cat *FunctionCatalog) error {
 	return cat.DeclareFunction(
-		FunctionDesc{Name: FNameFuncStart}, nil,
+		FunctionDesc{Name: FNameFuncStart},
 		getWrappedFuncOperate("FuncStart", "started", func(fc stf.Function) error { return fc.Start() }),
+		nil, nil,
 	)
 }
 func DeclareStfsFuncWait(cat *FunctionCatalog) error {
 	return cat.DeclareFunction(
-		FunctionDesc{Name: FNameFuncWait}, nil,
+		FunctionDesc{Name: FNameFuncWait},
 		getWrappedFuncOperate("FuncWait", "awaited", func(fc stf.Function) error { return fc.Wait() }),
+		nil, nil,
 	)
 }
 
 func DeclareStfsFuncTerminate(cat *FunctionCatalog) error {
 	return cat.DeclareFunction(
-		FunctionDesc{Name: FNameFuncTerminate}, nil,
+		FunctionDesc{Name: FNameFuncTerminate},
 		getWrappedFuncOperate("FuncTerminate", "terminated", func(fc stf.Function) error { fc.Terminate(); return nil }),
+		nil, nil,
 	)
 }

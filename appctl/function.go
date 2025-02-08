@@ -1,25 +1,17 @@
 package appctl
 
 import (
+	"context"
 	"fmt"
 	"github.com/t-beigbeder/otvl_qstf/stf"
 	"sync"
 )
 
-type MarshalerType int
-
-const (
-	MarshalerNone MarshalerType = iota
-	MarshalerJSON
-	MarshalerProtobuf
-)
-
 type StreamDesc struct {
-	Name      string        `json:"name"`
-	Discrete  bool          `json:"discrete"`
-	MaxLen    int           `json:"maxlen"`
-	MaxNb     int           `json:"maxnb"`
-	Marshaler MarshalerType `json:"marshaler"`
+	Name     string `json:"name"`
+	Discrete bool   `json:"discrete"`
+	MaxLen   int    `json:"maxlen"`
+	MaxNb    int    `json:"maxnb"`
 }
 
 type IStreamDesc struct {
@@ -38,18 +30,38 @@ type FunctionDesc struct {
 	OStreams   []OStreamDesc `json:"oStreams"`
 }
 
+type IStreamHandler struct {
+	BSet      func(context.Context, []byte) error
+	Unmarshal func(data []byte, v any) error
+	NewASet   func() any
+	ASet      func(context.Context, any) error
+}
+
+type OStreamHandler struct {
+	BGet       func(context.Context) ([]byte, error)
+	AGet       func(context.Context) (any, error)
+	Marshaller func(any) ([]byte, error)
+}
+
+type StreamHandlers struct {
+	ihs []IStreamHandler
+	ohs []OStreamHandler
+}
+
 type FunctionCatalog struct {
 	mux        sync.RWMutex
 	fds        map[string]FunctionDesc
-	sws        map[string]stf.StartWaiter
 	wrappedFns map[string]*stf.WrappedFunction
+	sws        map[string]stf.StartWaiter
+	sths       map[string]*StreamHandlers
 }
 
 func NewFunctionCatalog() *FunctionCatalog {
 	cat := &FunctionCatalog{
 		fds:        make(map[string]FunctionDesc),
-		sws:        make(map[string]stf.StartWaiter),
 		wrappedFns: make(map[string]*stf.WrappedFunction),
+		sws:        make(map[string]stf.StartWaiter),
+		sths:       make(map[string]*StreamHandlers),
 	}
 	_ = DeclareStfsNewFunction(cat)
 	_ = DeclareStfsFuncAddIStream(cat)
@@ -63,8 +75,9 @@ func NewFunctionCatalog() *FunctionCatalog {
 
 func (cat *FunctionCatalog) DeclareFunction(
 	fnDesc FunctionDesc,
-	sw stf.StartWaiter,
 	wrappedFn *stf.WrappedFunction,
+	sw stf.StartWaiter,
+	sths *StreamHandlers,
 ) error {
 	cat.mux.Lock()
 	defer cat.mux.Unlock()
@@ -73,16 +86,33 @@ func (cat *FunctionCatalog) DeclareFunction(
 	if ok {
 		return fmt.Errorf("function %s already exists", fn)
 	}
+	if sths != nil && len(sths.ihs) != len(fnDesc.IStreams) {
+		return fmt.Errorf("function %s describes %d iStreams, but declares %d handlers",
+			fn, len(fnDesc.IStreams), len(sths.ihs))
+	}
+	if sths != nil && len(sths.ohs) != len(fnDesc.OStreams) {
+		return fmt.Errorf("function %s describes %d oStreams, but declares %d handlers",
+			fn, len(fnDesc.OStreams), len(sths.ohs))
+	}
+	if sths == nil && len(fnDesc.IStreams) > 0 {
+		return fmt.Errorf("function %s describes %d iStreams, but does not declare handlers",
+			fn, len(fnDesc.IStreams))
+	}
+	if sths == nil && len(fnDesc.OStreams) > 0 {
+		return fmt.Errorf("function %s describes %d oStreams, but does not declare handlers",
+			fn, len(fnDesc.OStreams))
+	}
 	cat.fds[fn] = fnDesc
-	cat.sws[fn] = sw
 	cat.wrappedFns[fn] = wrappedFn
+	cat.sws[fn] = sw
+	cat.sths[fn] = sths
 	return nil
 }
 
-func (cat *FunctionCatalog) GetFunction(fName string) (*FunctionDesc, stf.StartWaiter, *stf.WrappedFunction, error) {
+func (cat *FunctionCatalog) GetFunction(fName string) (*FunctionDesc, stf.StartWaiter, *stf.WrappedFunction, *StreamHandlers, error) {
 	fd, ok := cat.fds[fName]
 	if !ok {
-		return nil, nil, nil, fmt.Errorf("function %s not found", fName)
+		return nil, nil, nil, nil, fmt.Errorf("function %s not found", fName)
 	}
-	return &fd, cat.sws[fName], cat.wrappedFns[fName], nil
+	return &fd, cat.sws[fName], cat.wrappedFns[fName], cat.sths[fName], nil
 }
