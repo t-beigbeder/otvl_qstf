@@ -8,8 +8,48 @@ import (
 
 type RidBs [8]byte
 
+func NewRidBs(rid uint64) RidBs {
+	rbs := RidBs{}
+	binary.BigEndian.PutUint64(rbs[:], rid)
+	return rbs
+}
+
+func SetRidBs(rid uint64, bs []byte) {
+	binary.BigEndian.PutUint64(bs, rid)
+}
+
+func (rbs RidBs) Get() uint64 {
+	return binary.BigEndian.Uint64(rbs[:])
+}
+
 func (rbs RidBs) String() string {
-	return fmt.Sprintf("%08x", binary.BigEndian.Uint64(rbs[:]))
+	return fmt.Sprintf("%08x", rbs.Get())
+}
+
+type LenBs [4]byte
+
+func NewLenBs(rid uint32) LenBs {
+	lbs := LenBs{}
+	binary.BigEndian.PutUint32(lbs[:], rid)
+	return lbs
+}
+
+func SetLenBs(ln uint32, bs []byte) {
+	binary.BigEndian.PutUint32(bs, ln)
+}
+
+func (lbs LenBs) Get() uint32 {
+	return binary.BigEndian.Uint32(lbs[:])
+}
+
+func (lbs LenBs) String() string {
+	return fmt.Sprintf("%d", lbs.Get())
+}
+
+type RspData struct {
+	Err     error
+	Rsp     any
+	Payload any
 }
 
 var (
@@ -80,4 +120,18 @@ type FuncOperReqMsg struct {
 
 type RespMsg struct {
 	Error string `json:"error"`
+}
+
+type ReqDesc struct {
+	Req func() any
+	Rsp func() any
+}
+
+func GetReqDesc(cmd string) *ReqDesc {
+	reqDescs := map[string]ReqDesc{
+		CmdAddIStream: {func() any { return &AddStreamReqMsg{} }, func() any { return &RespMsg{} }},
+		CmdAddOStream: {func() any { return &AddStreamReqMsg{} }, func() any { return &RespMsg{} }},
+	}
+	rd, _ := reqDescs[cmd]
+	return &rd
 }

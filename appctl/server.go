@@ -3,6 +3,7 @@ package appctl
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"github.com/quic-go/quic-go"
 	"github.com/t-beigbeder/otvl_qstf/internal/netutils"
@@ -15,7 +16,7 @@ type AppServerCnc interface {
 	Handle() error
 	Close(error) error
 	AddIStream(id string) error
-	GetOStream(id string) error
+	//GetOStream(id string) error
 	RunSyncFunction(funcId string) error
 	GetLogger() *slog.Logger
 }
@@ -25,41 +26,59 @@ type appServerCnc struct {
 	cat *FunctionCatalog
 }
 
+func (ac *appServerCnc) recvCtrl() (rid uint64, cmd string, req any, payload []byte, err error) {
+	stream := ac.cnc.GetCtrlStream()
+	bs := make([]byte, 12)
+	if _, err = io.ReadFull(stream, bs); err != nil {
+		return
+	}
+	rid = RidBs(bs[:]).Get()
+	lCmd := LenBs(bs[8:]).Get()
+	if lCmd > MaxReqSize {
+		err = fmt.Errorf("request too large (%d > %d)", lCmd, MaxReqSize)
+		return
+	}
+	bs = make([]byte, lCmd+4)
+	if _, err = io.ReadFull(stream, bs); err != nil {
+		return
+	}
+	cmd = string(bs[:lCmd])
+	lnRq := LenBs(bs[lCmd:]).Get()
+	if lnRq > MaxReqSize {
+		err = fmt.Errorf("request too large (%d > %d)", lnRq, MaxReqSize)
+		return
+	}
+	bs = make([]byte, lnRq)
+	if _, err = io.ReadFull(stream, bs); err != nil {
+		return
+	}
+	rd := GetReqDesc(cmd)
+	if rd == nil {
+		err = fmt.Errorf("unknown command: %s", cmd)
+		return
+	}
+	req = rd.Req()
+	if err = json.Unmarshal(bs, &req); err != nil {
+		return
+	}
+	return
+}
+
 func (ac *appServerCnc) Handle() error {
+	rid, cmd, areq, payload, err := ac.recvCtrl()
+	if err != nil {
+		return err
+	}
+	_, _, _, _ = rid, cmd, areq, payload
+	ac.GetLogger().Info("Received request", "cmd", cmd, "req", areq)
+	switch cmd {
+	case CmdAddOStream:
+		go ac.goSub(cmd, rid, ac.getOStream(rid, areq))
+	default:
+		ac.GetLogger().Error("Unknown command", "cmd", cmd)
+		return fmt.Errorf("unknown command: %s", cmd)
+	}
 	return nil
-	//stream := ac.cnc.GetCtrlStream()
-	//bs := make([]byte, 4)
-	//if _, err := io.ReadFull(stream, bs); err != nil {
-	//	return err
-	//}
-	//bln := binary.BigEndian.Uint32(bs)
-	//if bln > MaxReqSize {
-	//	return fmt.Errorf("request too large (%d > %d)", bln, MaxReqSize)
-	//}
-	//bs = make([]byte, bln)
-	//if _, err := io.ReadFull(stream, bs); err != nil {
-	//	return err
-	//}
-	//crqm := CtrlReqMsg{}
-	//if err := json.Unmarshal(bs, &crqm); err != nil {
-	//	return err
-	//}
-	//ac.GetLogger().Info("Received request", "req", crqm)
-	//switch crqm.Command {
-	//case CmdAddIStream:
-	//	return ac.AddIStream(crqm.StreamId)
-	//case CmdAddOStream:
-	//	return ac.GetOStream(crqm.StreamId)
-	//case CmdAddFuncIOStream:
-	//	return ac.AddFuncIOStream(crqm.StreamId, crqm.FuncId)
-	//// FIXME: move in appropriate "handler"
-	////case CmdWaitTermFunc:
-	////	return ac.WaitTermFunc(crqm.FuncId)
-	//case CmdRunSyncFunction:
-	//	return ac.RunSyncFunction(crqm.FName)
-	//default:
-	//	return fmt.Errorf("unknown command: %s", crqm.Command)
-	//}
 }
 
 func (ac *appServerCnc) Close(err error) error {
@@ -110,11 +129,49 @@ func (ac *appServerCnc) AddIStream(id string) error {
 	})
 }
 
-func (ac *appServerCnc) GetOStream(id string) error {
-	return ac.runAndResp(func(asc *appServerCnc) error {
-		_, err := asc.cnc.AddOStream(id)
+func (ac *appServerCnc) goSub(cmd string, rid uint64, err error) {
+	ac.GetLogger().Debug("Command done", "cmd", cmd, "rid", rid, "err", err)
+	if err != nil {
+		ac.GetLogger().Error("Error running command", "cmd", cmd, "rid", rid, "err", err)
+	}
+}
+
+func (ac *appServerCnc) sendCtrl(rid uint64, rsp any, payload []byte) error {
+	js, err := json.Marshal(rsp)
+	if err != nil {
 		return err
-	})
+	}
+	ln := 12 + len(js)
+	if payload != nil {
+		ln += 4 + len(payload)
+	}
+	bs := make([]byte, ln)
+	SetRidBs(rid, bs)
+	SetLenBs(uint32(len(js)), bs[8:])
+	copy(bs[12:], js)
+	if payload != nil {
+		SetLenBs(uint32(len(payload)), bs[12+len(js):])
+		copy(bs[16+len(js):], payload)
+	}
+	_, err = ac.cnc.GetCtrlStream().Write(bs)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (ac *appServerCnc) getOStream(rid uint64, areq any) error {
+	req, _ := areq.(*AddStreamReqMsg)
+	_, err := ac.cnc.AddOStream(req.StreamId)
+	rsp := &RespMsg{}
+	if err != nil {
+		rsp.Error = err.Error()
+	}
+	err = ac.sendCtrl(rid, rsp, nil)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (ac *appServerCnc) RunSyncFunction(fName string) error {

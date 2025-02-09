@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/quic-go/quic-go"
 	"github.com/t-beigbeder/otvl_qstf/internal/netutils"
@@ -73,7 +74,7 @@ type AppClient interface {
 type appClient struct {
 	ctlMux   sync.Mutex
 	curReqId uint64
-	reqChans map[RidBs]chan []byte
+	reqChans map[RidBs]chan RspData
 	cnc      Connection
 	funcs    map[string]FcClient
 	logger   *slog.Logger
@@ -81,36 +82,80 @@ type appClient struct {
 
 var _ AppClient = &appClient{}
 
-func (ac *appClient) launchBg(workLoad func() error) chan error {
+func (ac *appClient) sendCtrl(rid uint64, cmd string, req any) error {
+	js, err := json.Marshal(req)
+	if err != nil {
+		return err
+	}
+	bs := make([]byte, 8+4+len(cmd)+4+len(js))
+	SetRidBs(rid, bs)
+	SetLenBs(uint32(len(cmd)), bs[8:])
+	copy(bs[12:], cmd)
+	SetLenBs(uint32(len(js)), bs[12+len(cmd):])
+	copy(bs[16+len(cmd):], js)
+	_, err = ac.cnc.GetCtrlStream().Write(bs)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (ac *appClient) launchBg(
+	workLoad func(rid uint64, req, rqPl, rsp, rspPl any) error,
+	req, rqPl, rsp, rspPl any,
+) chan RspData {
 	ac.ctlMux.Lock()
 	defer ac.ctlMux.Unlock()
 	ac.curReqId++
 	reqId := ac.curReqId
 	var bs RidBs
 	binary.BigEndian.PutUint64(bs[:], reqId)
-	ac.reqChans[bs] = make(chan []byte)
-	outBg := make(chan error, 1)
+	ac.reqChans[bs] = make(chan RspData, 1)
 
 	go func() {
 		var err error
 		defer func() {
-			outBg <- err
+			ac.reqChans[bs] <- RspData{Err: err, Rsp: rsp, Payload: rspPl}
 		}()
-		ac.logger.Debug("launchBg: begin", "reqId", reqId, "bs", bs)
-		time.Sleep(100 * time.Millisecond)
-		err = workLoad()
-		ac.logger.Debug("launchBg: end", "reqId", reqId, "bs", bs)
+		err = workLoad(reqId, req, rqPl, rsp, rspPl)
+		time.Sleep(500 * time.Millisecond)
 	}()
-	return outBg
+	return ac.reqChans[bs]
 }
 
 func (ac *appClient) AddIStream(id string) (OStream, error) {
-	errBg := ac.launchBg(
-		func() error {
-			return fmt.Errorf("AddIStream: not yet implemented")
-		})
-	err := <-errBg
-	return nil, err
+	if id == "" {
+		id = NextId("out")
+	}
+	req := AddStreamReqMsg{StreamId: id}
+	rsp := RespMsg{}
+	var os OStream
+	rdc := ac.launchBg(
+		func(rid uint64, req, _, rsp, _ any) error {
+			err := ac.sendCtrl(rid, CmdAddOStream, req)
+			if err != nil {
+				return err
+			}
+			os, err = ac.cnc.AddOStream(id)
+			if err != nil {
+				return err
+			}
+			return errors.New("not implemented")
+		},
+		&req, nil, &rsp, nil,
+	)
+	rspData := <-rdc
+	if rspData.Err != nil {
+		return nil, rspData.Err
+	}
+	arsp, ok := rspData.Rsp.(*RespMsg)
+	if !ok {
+		return nil, fmt.Errorf("unexpected rsp type: %T", rspData.Rsp)
+	}
+	if arsp.Error != "" {
+		return nil, errors.New(arsp.Error)
+	}
+	return os, nil
 }
 
 func (ac *appClient) oldRT(string, func(client *appClient) error) error {
@@ -226,7 +271,7 @@ func NewAppClient(ctx context.Context, sAddr string, logger *slog.Logger) (AppCl
 		return nil, err
 	}
 	return &appClient{
-		reqChans: make(map[RidBs]chan []byte),
+		reqChans: make(map[RidBs]chan RspData),
 		cnc:      cnc,
 		funcs:    make(map[string]FcClient),
 		logger:   logger,
