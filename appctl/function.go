@@ -49,7 +49,7 @@ type StreamHandlers struct {
 }
 
 type FunctionCatalog struct {
-	mux        sync.RWMutex
+	mux        sync.Mutex
 	fds        map[string]FunctionDesc
 	wrappedFns map[string]*stf.WrappedFunction
 	sws        map[string]stf.StartWaiter
@@ -63,13 +63,6 @@ func NewFunctionCatalog() *FunctionCatalog {
 		sws:        make(map[string]stf.StartWaiter),
 		sths:       make(map[string]*StreamHandlers),
 	}
-	_ = DeclareStfsNewFunction(cat)
-	_ = DeclareStfsFuncAddIStream(cat)
-	_ = DeclareStfsFuncAddOStream(cat)
-	_ = DeclareStfsFuncRun(cat)
-	_ = DeclareStfsFuncStart(cat)
-	_ = DeclareStfsFuncWait(cat)
-	_ = DeclareStfsFuncTerminate(cat)
 	return cat
 }
 

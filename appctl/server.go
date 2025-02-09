@@ -3,8 +3,6 @@ package appctl
 import (
 	"context"
 	"crypto/tls"
-	"encoding/binary"
-	"encoding/json"
 	"fmt"
 	"github.com/quic-go/quic-go"
 	"github.com/t-beigbeder/otvl_qstf/internal/netutils"
@@ -18,7 +16,6 @@ type AppServerCnc interface {
 	Close(error) error
 	AddIStream(id string) error
 	GetOStream(id string) error
-	AddFuncIOStream(stId, fcId string) error
 	WaitTermFunc(id string) error
 	RunSyncFunction(funcId string) error
 	GetLogger() *slog.Logger
@@ -30,39 +27,40 @@ type appServerCnc struct {
 }
 
 func (ac *appServerCnc) Handle() error {
-	stream := ac.cnc.GetCtrlStream()
-	bs := make([]byte, 4)
-	if _, err := io.ReadFull(stream, bs); err != nil {
-		return err
-	}
-	bln := binary.BigEndian.Uint32(bs)
-	if bln > MaxReqSize {
-		return fmt.Errorf("request too large (%d > %d)", bln, MaxReqSize)
-	}
-	bs = make([]byte, bln)
-	if _, err := io.ReadFull(stream, bs); err != nil {
-		return err
-	}
-	crqm := CtrlReqMsg{}
-	if err := json.Unmarshal(bs, &crqm); err != nil {
-		return err
-	}
-	ac.GetLogger().Info("Received request", "req", crqm)
-	switch crqm.Command {
-	case CmdAddIStream:
-		return ac.AddIStream(crqm.StreamId)
-	case CmdAddOStream:
-		return ac.GetOStream(crqm.StreamId)
-	case CmdAddFuncIOStream:
-		return ac.AddFuncIOStream(crqm.StreamId, crqm.FuncId)
-	// FIXME: move in appropriate "handler"
-	//case CmdWaitTermFunc:
-	//	return ac.WaitTermFunc(crqm.FuncId)
-	case CmdRunSyncFunction:
-		return ac.RunSyncFunction(crqm.FName)
-	default:
-		return fmt.Errorf("unknown command: %s", crqm.Command)
-	}
+	return nil
+	//stream := ac.cnc.GetCtrlStream()
+	//bs := make([]byte, 4)
+	//if _, err := io.ReadFull(stream, bs); err != nil {
+	//	return err
+	//}
+	//bln := binary.BigEndian.Uint32(bs)
+	//if bln > MaxReqSize {
+	//	return fmt.Errorf("request too large (%d > %d)", bln, MaxReqSize)
+	//}
+	//bs = make([]byte, bln)
+	//if _, err := io.ReadFull(stream, bs); err != nil {
+	//	return err
+	//}
+	//crqm := CtrlReqMsg{}
+	//if err := json.Unmarshal(bs, &crqm); err != nil {
+	//	return err
+	//}
+	//ac.GetLogger().Info("Received request", "req", crqm)
+	//switch crqm.Command {
+	//case CmdAddIStream:
+	//	return ac.AddIStream(crqm.StreamId)
+	//case CmdAddOStream:
+	//	return ac.GetOStream(crqm.StreamId)
+	//case CmdAddFuncIOStream:
+	//	return ac.AddFuncIOStream(crqm.StreamId, crqm.FuncId)
+	//// FIXME: move in appropriate "handler"
+	////case CmdWaitTermFunc:
+	////	return ac.WaitTermFunc(crqm.FuncId)
+	//case CmdRunSyncFunction:
+	//	return ac.RunSyncFunction(crqm.FName)
+	//default:
+	//	return fmt.Errorf("unknown command: %s", crqm.Command)
+	//}
 }
 
 func (ac *appServerCnc) Close(err error) error {
@@ -73,33 +71,37 @@ func (ac *appServerCnc) Close(err error) error {
 	return ac.cnc.GetQuicConnection().CloseWithError(0, sErr)
 }
 
-func (ac *appServerCnc) sendRsp(err error) error {
-	sErr := ""
-	if err != nil {
-		sErr = err.Error()
-	}
-	crsm := CtrlRspMsg{Error: sErr}
-	bs, err := json.Marshal(crsm)
-	if err != nil {
-		return err
-	}
-	wbs := make([]byte, len(bs)+4)
-	binary.BigEndian.PutUint32(wbs, uint32(len(bs)))
-	copy(wbs[4:], bs)
-	stream := ac.cnc.GetCtrlStream()
-	if _, err = stream.Write(wbs); err != nil {
-		return err
-	}
-	return nil
-}
+//func (ac *appServerCnc) sendRsp(err error) error {
+//	sErr := ""
+//	if err != nil {
+//		sErr = err.Error()
+//	}
+//	crsm := CtrlRspMsg{Error: sErr}
+//	bs, err := json.Marshal(crsm)
+//	if err != nil {
+//		return err
+//	}
+//	wbs := make([]byte, len(bs)+4)
+//	binary.BigEndian.PutUint32(wbs, uint32(len(bs)))
+//	copy(wbs[4:], bs)
+//	stream := ac.cnc.GetCtrlStream()
+//	if _, err = stream.Write(wbs); err != nil {
+//		return err
+//	}
+//	return nil
+//}
+//
+//func (ac *appServerCnc) runAndResp(toRun func(ac *appServerCnc) error) error {
+//	err := toRun(ac)
+//	eErr := ac.sendRsp(err)
+//	if err == nil {
+//		err = eErr
+//	}
+//	return err
+//}
 
-func (ac *appServerCnc) runAndResp(toRun func(ac *appServerCnc) error) error {
-	err := toRun(ac)
-	eErr := ac.sendRsp(err)
-	if err == nil {
-		err = eErr
-	}
-	return err
+func (ac *appServerCnc) runAndResp(f func(asc *appServerCnc) error) error {
+	return nil
 }
 
 func (ac *appServerCnc) AddIStream(id string) error {
@@ -112,21 +114,6 @@ func (ac *appServerCnc) AddIStream(id string) error {
 func (ac *appServerCnc) GetOStream(id string) error {
 	return ac.runAndResp(func(asc *appServerCnc) error {
 		_, err := asc.cnc.AddOStream(id)
-		return err
-	})
-}
-
-func (ac *appServerCnc) AddFuncIOStream(stId, fcId string) error {
-	return ac.runAndResp(func(asc *appServerCnc) error {
-		fc, _, _ := ac.cnc.GetFunction(fcId)
-		if fc == nil {
-			return fmt.Errorf("function id %s not found", fcId)
-		}
-		ios, err := asc.cnc.AddFuncCtrlStream(stId)
-		if err != nil {
-			return err
-		}
-		err = fc.AddCtrlStream(ios)
 		return err
 	})
 }
@@ -147,12 +134,15 @@ func (ac *appServerCnc) RunSyncFunction(fName string) error {
 	if wf == nil {
 		return fmt.Errorf("function %s has no wrapped function, currently not supported", fName)
 	}
+	var rr io.Reader
+	var wr io.Writer
 	return ac.runAndResp(func(asc *appServerCnc) error {
 		fw, err := stf.NewSyncFuncWrapper(
 			ac.cnc.GetCtx(),
 			*wf,
-			ac.cnc.GetSyncStream(),
-			ac.cnc.GetSyncStream(),
+			rr, wr,
+			//ac.cnc.GetSyncStream(),
+			//ac.cnc.GetSyncStream(),
 		)
 		if err != nil {
 			return err
@@ -201,11 +191,11 @@ func (as *appServer) NewCnc(qc quic.Connection) {
 		qc.CloseWithError(0, err.Error())
 		return
 	}
-	if err := cnc.SetSyncStream(); err != nil {
-		cnc.GetLogger().Error("AppServerConnectionHandler", "err", err)
-		qc.CloseWithError(0, err.Error())
-		return
-	}
+	//if err := cnc.SetSyncStream(); err != nil {
+	//	cnc.GetLogger().Error("AppServerConnectionHandler", "err", err)
+	//	qc.CloseWithError(0, err.Error())
+	//	return
+	//}
 	ac := &appServerCnc{
 		cnc: cnc,
 		cat: as.cat,

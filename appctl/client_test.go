@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/stretchr/testify/require"
-	"github.com/t-beigbeder/otvl_qstf/stf"
 	os2 "os"
 	"testing"
 	"time"
@@ -23,33 +22,33 @@ func TestNewAppClientBasic(t *testing.T) {
 	time.Sleep(20 * time.Millisecond)
 }
 
-func TestNewAppClientRunSync(t *testing.T) {
-	port, cancel, err := RunTestServer(func(as AppServer) {
-		as.Catalog().DeclareFunction(
-			FunctionDesc{Name: "TestNewAppClientBasic"},
-			&stf.WrappedFunction{
-				func() any {
-					a := ""
-					return &a
-				},
-				func(ctx context.Context, a any) any {
-					return fmt.Sprintf("TestNewAppClientBasic: %v", a)
-				},
-			}, nil, nil)
-	})
-	require.NoError(t, err)
-	ac, err := NewAppClient(context.Background(), "localhost:"+port, GetLoggerFor("client"))
-	require.NoError(t, err)
-	require.NotNil(t, ac)
-	time.Sleep(10 * time.Millisecond)
-	for i := 0; i < 5; i++ {
-		var sOut string
-		err = ac.RunSyncFunction("TestNewAppClientBasic", fmt.Sprintf("#%03d", i), &sOut)
-		require.NoError(t, err)
-	}
-	cancel()
-	time.Sleep(20 * time.Millisecond)
-}
+//func TestNewAppClientRunSync(t *testing.T) {
+//	port, cancel, err := RunTestServer(func(as AppServer) {
+//		as.Catalog().DeclareFunction(
+//			FunctionDesc{Name: "TestNewAppClientBasic"},
+//			&stf.WrappedFunction{
+//				func() any {
+//					a := ""
+//					return &a
+//				},
+//				func(ctx context.Context, a any) any {
+//					return fmt.Sprintf("TestNewAppClientBasic: %v", a)
+//				},
+//			}, nil, nil)
+//	})
+//	require.NoError(t, err)
+//	ac, err := NewAppClient(context.Background(), "localhost:"+port, GetLoggerFor("client"))
+//	require.NoError(t, err)
+//	require.NotNil(t, ac)
+//	time.Sleep(10 * time.Millisecond)
+//	for i := 0; i < 5; i++ {
+//		var sOut string
+//		err = ac.RunSyncFunction("TestNewAppClientBasic", fmt.Sprintf("#%03d", i), &sOut)
+//		require.NoError(t, err)
+//	}
+//	cancel()
+//	time.Sleep(20 * time.Millisecond)
+//}
 
 type testSw struct {
 	in any

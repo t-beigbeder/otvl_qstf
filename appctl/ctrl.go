@@ -26,56 +26,51 @@ func NextId(prefix string) string {
 }
 
 const (
-	CmdAddIStream       = "AddIStream"
-	CmdAddOStream       = "AddOStream"
-	CmdRunSyncFunction  = "RunSyncFunction"
-	CmdAddFuncIOStream  = "AddFuncIOStream"
-	CmdWaitTermFunc     = "WaitTermFunc"
-	FNameNewFunction    = "/stf/NewFunction"
-	FNameFuncAddIStream = "/stf/FuncAddIStream"
-	FNameFuncAddOStream = "/stf/FuncAddOStream"
-	FNameFuncRun        = "/stf/FuncRun"
-	FNameFuncStart      = "/stf/FuncStart"
-	FNameFuncWait       = "/stf/FuncWait"
-	FNameFuncTerminate  = "/stf/FuncTerminate"
-	MaxReqSize          = 256
-	MaxRspSize          = 256
+	CmdAddIStream      = "AddIStream"
+	CmdAddOStream      = "AddOStream"
+	CmdRunSyncFunction = "RunSyncFunction"
+	CmdNewFunction     = "NewFunction"
+	CmdFuncAddIStream  = "FuncAddIStream"
+	CmdFuncAddOStream  = "FuncAddOStream"
+	CmdFuncOper        = "FuncOper"
+	MaxReqSize         = 256
+	MaxRspSize         = 256
 )
 
-type CtrlReqMsg struct {
-	Command  string `json:"command"`
-	StreamId string `json:"streamId,omitempty"`
-	FName    string `json:"fName,omitempty"`
-	FuncId   string `json:"funcId,omitempty"`
+type AddStreamReqMsg struct {
+	StreamId string `json:"streamId"`
 }
 
-type CtrlRspMsg struct {
-	Error string `json:"error,omitempty"`
+type RunSyncFunctionReqMsg struct {
+	FuncId  string `json:"funcId"`
+	InPlLen int    `json:"inPlLen"`
+}
+
+type RunSyncFunctionRespMsg struct {
+	Error    string `json:"error"`
+	OutPlLen int    `json:"outPlLen"`
 }
 
 type NewFunctionReqMsg struct {
-	Name string `json:"name"`
-	Id   string `json:"id"`
+	FdName     string `json:"fdName"`
+	FuncId     string `json:"funcId"`
+	Terminable bool   `json:"terminable"`
 }
 
-type NewFunctionRespMsg struct {
-	Error string       `json:"error,omitempty"`
-	Desc  FunctionDesc `json:"desc,omitempty"`
+type FuncAddStreamReqMsg struct {
+	FuncId   string `json:"funcId"`
+	StreamId string `json:"streamId"`
+	Discrete bool   `json:"discrete"`
+	MaxLen   int    `json:"maxLen"`
+	MaxNb    int    `json:"maxNb"`
+	BSize    int    `json:"bSize"`
 }
 
-type FuncOperateReqMsg struct {
-	Id string `json:"id"`
+type FuncOperReqMsg struct {
+	Oper   string `json:"oper"`
+	FuncId string `json:"funcId"`
 }
 
-type FuncOperateRespMsg struct {
-	Error string `json:"error,omitempty"`
-}
-
-type FuncStreamReqMsg struct {
-	FcId string `json:"fcId"`
-	StId string `json:"stId"`
-}
-
-type FuncStreamRespMsg struct {
-	Error string `json:"error,omitempty"`
+type RespMsg struct {
+	Error string `json:"error"`
 }

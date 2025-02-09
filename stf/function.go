@@ -2,8 +2,6 @@ package stf
 
 import (
 	"context"
-	"encoding/binary"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -37,7 +35,6 @@ type Function interface {
 	GetOutStream(string) OutStream
 	GetInStreams() []InStream
 	GetOutStreams() []OutStream
-	AddCtrlStream(io.ReadWriter) error
 	Run() error
 	Start() error
 	Wait() error
@@ -53,7 +50,7 @@ type StartWaiter interface {
 }
 
 type function struct {
-	name       string
+	id         string
 	ctx        context.Context
 	sw         StartWaiter
 	mux        sync.Mutex
@@ -65,7 +62,6 @@ type function struct {
 	outs       map[string]*outStream
 	inList     []*inStream
 	outList    []*outStream
-	ctrlStream io.ReadWriter
 	wg         sync.WaitGroup
 }
 
@@ -84,8 +80,8 @@ func (fc *function) setState(newState FunctionState, err error) error {
 	return err
 }
 
-func (fc *function) allocStName(opts *StOptions) {
-	if opts.Name != "" {
+func (fc *function) allocStId(opts *StOptions) {
+	if opts.Id != "" {
 		return
 	}
 	for i := 0; ; i++ {
@@ -93,7 +89,7 @@ func (fc *function) allocStName(opts *StOptions) {
 		_, iOk := fc.ins[name]
 		_, oOk := fc.outs[name]
 		if !iOk && !oOk {
-			opts.Name = name
+			opts.Id = name
 			break
 		}
 	}
@@ -125,11 +121,6 @@ func (fc *function) GetOutStreams() []OutStream {
 	return res
 }
 
-func (fc *function) AddCtrlStream(rw io.ReadWriter) error {
-	fc.ctrlStream = rw
-	return nil
-}
-
 func (fc *function) activateStream(st *stream, sti Stream) {
 	fc.wg.Add(1)
 	st.ctrChan = make(chan ctrlMsg, 1)
@@ -158,13 +149,13 @@ func (fc *function) AddInStream(rr io.Reader, opts ...IstOption) (InStream, erro
 	if err != nil {
 		return nil, fc.setState(StateFinished, err)
 	}
-	fc.allocStName(&sopt.StOptions)
+	fc.allocStId(&sopt.StOptions)
 	is := &inStream{
-		stream: stream{name: sopt.Name, ctx: fc.ctx},
+		stream: stream{name: sopt.Id, ctx: fc.ctx},
 		rr:     rr,
 		opts:   sopt,
 	}
-	fc.ins[sopt.StOptions.Name] = is
+	fc.ins[sopt.StOptions.Id] = is
 	fc.inList = append(fc.inList, is)
 	fc.activateStream(&is.stream, is)
 	return is, nil
@@ -189,33 +180,16 @@ func (fc *function) AddOutStream(wr io.Writer, opts ...OstOption) (OutStream, er
 	if err != nil {
 		return nil, fc.setState(StateFinished, err)
 	}
-	fc.allocStName(&sopt.StOptions)
+	fc.allocStId(&sopt.StOptions)
 	os := &outStream{
-		stream: stream{name: sopt.Name, ctx: fc.ctx},
+		stream: stream{name: sopt.Id, ctx: fc.ctx},
 		wr:     wr,
 		opts:   sopt,
 	}
-	fc.outs[sopt.StOptions.Name] = os
+	fc.outs[sopt.StOptions.Id] = os
 	fc.outList = append(fc.outList, os)
 	fc.activateStream(&os.stream, os)
 	return os, nil
-}
-
-func (fc *function) handleCtrlStream() error {
-	stream := fc.ctrlStream
-	bs := make([]byte, 4)
-	if _, err := io.ReadFull(stream, bs); err != nil {
-		return err
-	}
-	bln := binary.BigEndian.Uint32(bs)
-	if bln > 128 {
-		return fmt.Errorf("request too large (%d > %d)", bln, 128)
-	}
-	bs = make([]byte, bln)
-	if _, err := io.ReadFull(stream, bs); err != nil {
-		return err
-	}
-	//	return ac.WaitTermFunc(crqm.FuncId)
 }
 
 func (fc *function) Start() error {
@@ -233,7 +207,7 @@ func (fc *function) Start() error {
 	}
 
 	fc.ctrChan = make(chan struct{}, 1)
-	fc.wg.Add(2)
+	fc.wg.Add(1)
 	go func() {
 		defer fc.wg.Done()
 		for {
@@ -247,17 +221,6 @@ func (fc *function) Start() error {
 				}
 				fc.setState(StateFinished, nil)
 				return
-			}
-		}
-	}()
-	go func() {
-		defer fc.wg.Done()
-		for {
-			select {
-			case <-fc.ctrChan:
-				return
-			default:
-				fc.handleCtrlStream()
 			}
 		}
 	}()
@@ -295,7 +258,7 @@ func (fc *function) State() FunctionState {
 }
 
 func (fc *function) Options() FcOptions {
-	return FcOptions{Name: fc.name, Terminable: fc.terminable}
+	return FcOptions{Id: fc.id, Terminable: fc.terminable}
 }
 
 func (fc *function) Error() error {
@@ -316,7 +279,7 @@ func NewFunction(ctx context.Context, sw StartWaiter, opts ...FcOption) (Functio
 		return nil, err
 	}
 	fc := &function{
-		name:       fopt.Name,
+		id:         fopt.Id,
 		terminable: fopt.Terminable,
 		ctx:        ctx,
 		sw:         sw,

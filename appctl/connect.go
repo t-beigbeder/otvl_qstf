@@ -22,15 +22,12 @@ type Connection interface {
 	GetLogger() *slog.Logger
 	SetCtrlStream() error
 	GetCtrlStream() IOStream
-	SetSyncStream() error
-	GetSyncStream() IOStream
-	AddFuncCtrlStream(string) (IOStream, error)
 	AddIStream(id string) (IStream, error)
 	AddOStream(id string) (OStream, error)
 	GetIStream(id string) IStream
 	GetOStream(id string) OStream
-	NewFunction(id string, fc stf.Function, fd *FunctionDesc, sths *StreamHandlers) error
-	GetFunction(id string) (stf.Function, *FunctionDesc, *StreamHandlers)
+	//NewFunction(id string, fc stf.Function, fd *FunctionDesc, sths *StreamHandlers) error
+	//GetFunction(id string) (stf.Function, *FunctionDesc, *StreamHandlers)
 }
 
 type connection struct {
@@ -41,7 +38,7 @@ type connection struct {
 	isQuicServer bool
 	isAppServer  bool
 	ctlStream    IOStream
-	syncStream   IOStream
+	reqChans     map[string]chan []byte
 	iss          map[string]IStream
 	oss          map[string]OStream
 	funcs        map[string]stf.Function
@@ -58,6 +55,7 @@ func NewConnection(ctx context.Context, qc quic.Connection, id string, isQuicSer
 		id:           id,
 		isQuicServer: isQuicServer,
 		isAppServer:  isAppServer,
+		reqChans:     make(map[string]chan []byte),
 		iss:          make(map[string]IStream),
 		oss:          make(map[string]OStream),
 		funcs:        make(map[string]stf.Function),
@@ -143,28 +141,6 @@ func (c *connection) GetCtrlStream() IOStream {
 	return c.ctlStream
 }
 
-func (c *connection) SetSyncStream() (err error) {
-	qst, read, written, err := c.makeQStream("sync", c.isAppServer)
-	if err != nil {
-		return err
-	}
-	c.syncStream = NewIOStream("sync", qst, read, written)
-	c.logger.Debug("new sync stream", "id", c.id, "qid", c.syncStream.Qid())
-	return nil
-}
-
-func (c *connection) GetSyncStream() IOStream {
-	return c.syncStream
-}
-
-func (c *connection) AddFuncCtrlStream(stId string) (IOStream, error) {
-	qst, read, written, err := c.makeQStream(stId, c.isAppServer)
-	if err != nil {
-		return nil, err
-	}
-	return NewIOStream(stId, qst, read, written), nil
-}
-
 func (c *connection) AddIStream(id string) (IStream, error) {
 	c.mmux.Lock()
 	defer c.mmux.Unlock()
@@ -207,12 +183,12 @@ func (c *connection) GetOStream(id string) OStream {
 	return os
 }
 
-func (c *connection) NewFunction(id string, fc stf.Function, fd *FunctionDesc, sths *StreamHandlers) error {
+func (c *connection) fxNewFunction(id string, fc stf.Function, fd *FunctionDesc, sths *StreamHandlers) error {
 	c.mmux.Lock()
 	defer c.mmux.Unlock()
 	_, ok := c.funcs[id]
 	if ok {
-		return fmt.Errorf("function %s already exists", id)
+		return fmt.Errorf("function id %s already exists", id)
 	}
 	c.logger.Info("new function", "id", id)
 	c.funcs[id] = fc
@@ -221,7 +197,7 @@ func (c *connection) NewFunction(id string, fc stf.Function, fd *FunctionDesc, s
 	return nil
 }
 
-func (c *connection) GetFunction(id string) (stf.Function, *FunctionDesc, *StreamHandlers) {
+func (c *connection) fxGetFunction(id string) (stf.Function, *FunctionDesc, *StreamHandlers) {
 	fc, _ := c.funcs[id]
 	fd, _ := c.fds[id]
 	sths, _ := c.sthss[id]

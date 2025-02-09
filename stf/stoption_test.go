@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestStName(t *testing.T) {
+func TestStId(t *testing.T) {
 	nist := func(id string, opts ...IstOption) IstOptions {
 		var os IstOptions
 		for _, o := range opts {
@@ -13,6 +13,6 @@ func TestStName(t *testing.T) {
 		}
 		return os
 	}
-	os := nist("id", IstName("a"), IstBsize(256))
-	require.Equal(t, IstOptions{StOptions: StOptions{Name: "a"}, BSize: 256}, os)
+	os := nist("id", IstId("a"), IstBsize(256))
+	require.Equal(t, IstOptions{StOptions: StOptions{Id: "a"}, BSize: 256}, os)
 }

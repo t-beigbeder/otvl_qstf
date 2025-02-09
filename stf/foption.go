@@ -3,8 +3,8 @@ package stf
 // FcOptions can be used to create a customized function.
 type FcOptions struct {
 
-	// Name is an optional name label
-	Name string
+	// Id is an optional identifier label
+	Id string
 
 	// Terminable enable to send Terminate message to a backgroup function
 	Terminable bool
@@ -13,10 +13,10 @@ type FcOptions struct {
 // FcOption is a function on the options for a function.
 type FcOption func(*FcOptions) error
 
-// FcName is a FcOption to set the function name.
-func FcName(name string) FcOption {
+// FcId is a FcOption to set the function id.
+func FcId(id string) FcOption {
 	return func(o *FcOptions) error {
-		o.Name = name
+		o.Id = id
 		return nil
 	}
 }

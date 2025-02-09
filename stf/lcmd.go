@@ -56,13 +56,13 @@ func NewLocalCommand(
 	if fc.Options().Terminable {
 		return nil, errors.New("a local command function cannot be set terminable")
 	}
-	if sw.is, err = fc.AddInStream(stdin, IstName("stdin")); err != nil {
+	if sw.is, err = fc.AddInStream(stdin, IstId("stdin")); err != nil {
 		return nil, err
 	}
-	if sw.os, err = fc.AddOutStream(stdout, OstName("stdout")); err != nil {
+	if sw.os, err = fc.AddOutStream(stdout, OstId("stdout")); err != nil {
 		return nil, err
 	}
-	if sw.es, err = fc.AddOutStream(stderr, OstName("stderr")); err != nil {
+	if sw.es, err = fc.AddOutStream(stderr, OstId("stderr")); err != nil {
 		return nil, err
 	}
 	return fc, nil

@@ -19,7 +19,7 @@ func TestNewLocalCommandBasic(t *testing.T) {
 		context.Background(),
 		cs,
 		stdin, stdout, stderr,
-		FcName("TestNewLocalCommandBasic"))
+		FcId("TestNewLocalCommandBasic"))
 	require.NoError(t, err)
 	err = lcfc.Run()
 	require.NoError(t, err)
@@ -43,7 +43,7 @@ func TestNewLocalCommandIO(t *testing.T) {
 		context.Background(),
 		cs,
 		stdin, stdout, stderr,
-		FcName("TestNewLocalCommandIO"))
+		FcId("TestNewLocalCommandIO"))
 	require.NoError(t, err)
 	err = lcfc.Run()
 	require.NoError(t, err)
@@ -67,7 +67,7 @@ func TestNewLocalCommandStderr(t *testing.T) {
 		context.Background(),
 		cs,
 		stdin, stdout, stderr,
-		FcName("TestNewLocalCommandIO"))
+		FcId("TestNewLocalCommandIO"))
 	require.NoError(t, err)
 	err = lcfc.Run()
 	require.NoError(t, err)
@@ -94,7 +94,7 @@ func TestNewLocalCommandLarge(t *testing.T) {
 		context.Background(),
 		cs,
 		stdin, stdout, stderr,
-		FcName("TestNewLocalCommandLarge"))
+		FcId("TestNewLocalCommandLarge"))
 	require.NoError(t, err)
 	err = lcfc.Run()
 	require.NoError(t, err)
@@ -122,7 +122,7 @@ func TestNewLocalCommandLong(t *testing.T) {
 		context.Background(),
 		cs,
 		stdin, stdout, stderr,
-		FcName("TestNewLocalCommandLong"))
+		FcId("TestNewLocalCommandLong"))
 	require.NoError(t, err)
 	err = lcfc.Run()
 	require.NoError(t, err)

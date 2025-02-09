@@ -8,8 +8,8 @@ import (
 // StOptions can be used to create a customized stream.
 type StOptions struct {
 
-	// Name is an optional name label
-	Name string
+	// Id is an optional id label
+	Id string
 
 	// Discrete indicates I/O operate on sequence of length/data blocks
 	Discrete bool
@@ -47,10 +47,10 @@ type IstOptions struct {
 // IstOption is a function on the options for an input stream.
 type IstOption func(*IstOptions) error
 
-// IstName is a IstOption to set the stream name.
-func IstName(name string) IstOption {
+// IstId is a IstOption to set the stream id.
+func IstId(id string) IstOption {
 	return func(o *IstOptions) error {
-		o.Name = name
+		o.Id = id
 		return nil
 	}
 }
@@ -138,10 +138,10 @@ type OstOptions struct {
 // OstOption is a function on the options for an output stream.
 type OstOption func(*OstOptions) error
 
-// OstName is a OstOption to set the stream name.
-func OstName(name string) OstOption {
+// OstId is a OstOption to set the stream id.
+func OstId(id string) OstOption {
 	return func(o *OstOptions) error {
-		o.Name = name
+		o.Id = id
 		return nil
 	}
 }
