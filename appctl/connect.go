@@ -38,7 +38,6 @@ type connection struct {
 	isQuicServer bool
 	isAppServer  bool
 	ctlStream    IOStream
-	reqChans     map[string]chan []byte
 	iss          map[string]IStream
 	oss          map[string]OStream
 	funcs        map[string]stf.Function
@@ -55,7 +54,6 @@ func NewConnection(ctx context.Context, qc quic.Connection, id string, isQuicSer
 		id:           id,
 		isQuicServer: isQuicServer,
 		isAppServer:  isAppServer,
-		reqChans:     make(map[string]chan []byte),
 		iss:          make(map[string]IStream),
 		oss:          make(map[string]OStream),
 		funcs:        make(map[string]stf.Function),

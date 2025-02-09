@@ -10,6 +10,7 @@ import (
 	"io"
 	"log/slog"
 	"sync"
+	"time"
 )
 
 type FcClient interface {
@@ -72,16 +73,51 @@ type AppClient interface {
 type appClient struct {
 	ctlMux   sync.Mutex
 	curReqId uint64
+	reqChans map[RidBs]chan []byte
 	cnc      Connection
 	funcs    map[string]FcClient
+	logger   *slog.Logger
 }
 
 var _ AppClient = &appClient{}
 
+func (ac *appClient) launchBg(workLoad func() error) chan error {
+	ac.ctlMux.Lock()
+	defer ac.ctlMux.Unlock()
+	ac.curReqId++
+	reqId := ac.curReqId
+	var bs RidBs
+	binary.BigEndian.PutUint64(bs[:], reqId)
+	ac.reqChans[bs] = make(chan []byte)
+	outBg := make(chan error, 1)
+
+	go func() {
+		var err error
+		defer func() {
+			outBg <- err
+		}()
+		ac.logger.Debug("launchBg: begin", "reqId", reqId, "bs", bs)
+		time.Sleep(100 * time.Millisecond)
+		err = workLoad()
+		ac.logger.Debug("launchBg: end", "reqId", reqId, "bs", bs)
+	}()
+	return outBg
+}
+
+func (ac *appClient) AddIStream(id string) (OStream, error) {
+	errBg := ac.launchBg(
+		func() error {
+			return fmt.Errorf("AddIStream: not yet implemented")
+		})
+	err := <-errBg
+	return nil, err
+}
+
 func (ac *appClient) oldRT(string, func(client *appClient) error) error {
 	return nil
 }
-func (ac *appClient) AddIStream(id string) (OStream, error) {
+
+func (ac *appClient) oldAddIStream(id string) (OStream, error) {
 	if id == "" {
 		id = NextId("out")
 	}
@@ -189,5 +225,10 @@ func NewAppClient(ctx context.Context, sAddr string, logger *slog.Logger) (AppCl
 	if err := cnc.SetCtrlStream(); err != nil {
 		return nil, err
 	}
-	return &appClient{cnc: cnc, funcs: make(map[string]FcClient)}, nil
+	return &appClient{
+		reqChans: make(map[RidBs]chan []byte),
+		cnc:      cnc,
+		funcs:    make(map[string]FcClient),
+		logger:   logger,
+	}, nil
 }

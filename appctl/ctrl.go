@@ -1,9 +1,16 @@
 package appctl
 
 import (
+	"encoding/binary"
 	"fmt"
 	"sync"
 )
+
+type RidBs [8]byte
+
+func (rbs RidBs) String() string {
+	return fmt.Sprintf("%08x", binary.BigEndian.Uint64(rbs[:]))
+}
 
 var (
 	idmux  sync.Mutex

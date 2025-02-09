@@ -16,7 +16,6 @@ type AppServerCnc interface {
 	Close(error) error
 	AddIStream(id string) error
 	GetOStream(id string) error
-	WaitTermFunc(id string) error
 	RunSyncFunction(funcId string) error
 	GetLogger() *slog.Logger
 }
@@ -116,14 +115,6 @@ func (ac *appServerCnc) GetOStream(id string) error {
 		_, err := asc.cnc.AddOStream(id)
 		return err
 	})
-}
-
-func (ac *appServerCnc) WaitTermFunc(id string) error {
-	fc, _, _ := ac.cnc.GetFunction(id)
-	if fc == nil {
-		return fmt.Errorf("function id %s not found", id)
-	}
-	return fc.Wait()
 }
 
 func (ac *appServerCnc) RunSyncFunction(fName string) error {
