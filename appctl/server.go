@@ -184,12 +184,12 @@ func runSyncFunction(ac *appServerCnc, _ uint64, areq any, rqPl []byte) (arsp an
 		rsp.Error = fmt.Sprintf("function %s has no wrapped function, currently not supported", req.FdName)
 		return
 	}
-	fw, err := stf.NewSyncFuncWrapper(
-		ac.cnc.GetCtx(),
-		*wf,
-		ac.cnc.GetSyncStream(),
-		ac.cnc.GetSyncStream(),
-	)
+	//fw, err := stf.NewSyncFuncWrapper(
+	//	ac.cnc.GetCtx(),
+	//	*wf,
+	//	ac.cnc.GetSyncStream(),
+	//	ac.cnc.GetSyncStream(),
+	//)
 
 	if err != nil {
 		rsp.Error = err.Error()
