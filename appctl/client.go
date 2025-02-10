@@ -14,7 +14,7 @@ import (
 )
 
 type FcClient interface {
-	GetDesc() *FunctionDesc
+	GetDesc() FunctionDesc
 	GetId() string
 	AddIStream(IStream) error
 	AddOStream(OStream) error
@@ -25,12 +25,14 @@ type FcClient interface {
 }
 
 type fcClient struct {
-	ac   *appClient
-	desc *FunctionDesc
-	id   string
+	ac    *appClient
+	desc  FunctionDesc
+	id    string
+	isIds []string
+	osIds []string
 }
 
-func (fc *fcClient) GetDesc() *FunctionDesc {
+func (fc *fcClient) GetDesc() FunctionDesc {
 	return fc.desc
 }
 
@@ -39,11 +41,82 @@ func (fc *fcClient) GetId() string {
 }
 
 func (fc *fcClient) AddIStream(is IStream) error {
-	panic("implement me")
+	fd := fc.desc
+	if len(fc.isIds) >= len(fd.IStreams) {
+		return fmt.Errorf("cannot add more than %d istreams", len(fd.IStreams))
+	}
+	isd := fd.IStreams[len(fc.isIds)]
+	req := FuncAddStreamReqMsg{
+		FuncId:   fc.id,
+		StreamId: is.Id(),
+		Discrete: isd.Discrete,
+		MaxLen:   isd.MaxLen,
+		MaxNb:    isd.MaxNb,
+		BSize:    isd.BSize,
+	}
+	rsp := RespMsg{}
+	ac := fc.ac
+	rqDc := ac.launchBg(
+		func(rid uint64, req, rqPl, rsp, rspPl any) error {
+			err := ac.sendCtrl(rid, CmdFuncAddIStream, req)
+			if err != nil {
+				return err
+			}
+			return nil
+		},
+		&req, nil, &rsp, nil,
+	)
+	rspData := <-rqDc
+	if rspData.Err != nil {
+		return rspData.Err
+	}
+	arsp, ok := rspData.Rsp.(*RespMsg)
+	if !ok {
+		return fmt.Errorf("unexpected rsp type: %T", rspData.Rsp)
+	}
+	if arsp.Error != "" {
+		return errors.New(arsp.Error)
+	}
+	return nil
 }
 
 func (fc *fcClient) AddOStream(os OStream) error {
-	panic("implement me")
+	fd := fc.desc
+	if len(fc.osIds) >= len(fd.OStreams) {
+		return fmt.Errorf("cannot add more than %d ostreams", len(fd.OStreams))
+	}
+	osd := fd.OStreams[len(fc.osIds)]
+	req := FuncAddStreamReqMsg{
+		FuncId:   fc.id,
+		StreamId: os.Id(),
+		Discrete: osd.Discrete,
+		MaxLen:   osd.MaxLen,
+		MaxNb:    osd.MaxNb,
+	}
+	rsp := RespMsg{}
+	ac := fc.ac
+	rqDc := ac.launchBg(
+		func(rid uint64, req, rqPl, rsp, rspPl any) error {
+			err := ac.sendCtrl(rid, CmdFuncAddOStream, req)
+			if err != nil {
+				return err
+			}
+			return nil
+		},
+		&req, nil, &rsp, nil,
+	)
+	rspData := <-rqDc
+	if rspData.Err != nil {
+		return rspData.Err
+	}
+	arsp, ok := rspData.Rsp.(*RespMsg)
+	if !ok {
+		return fmt.Errorf("unexpected rsp type: %T", rspData.Rsp)
+	}
+	if arsp.Error != "" {
+		return errors.New(arsp.Error)
+	}
+	return nil
 }
 
 func (fc *fcClient) Run() error {
@@ -158,9 +231,7 @@ func (ac *appClient) lstnCtrl() {
 			ac.logger.Info("shutting down ctrl listener")
 			return
 		default:
-			ac.logger.Debug("ctrl listener reading...")
 			ac.recvCtrl()
-			ac.logger.Info("ctrl listener reading done")
 		}
 	}
 }
@@ -386,7 +457,7 @@ func (ac *appClient) NewFunction(fName string, id string) (FcClient, error) {
 	if arsp.Error != "" {
 		return nil, errors.New(arsp.Error)
 	}
-	fc := &fcClient{ac, &(rsp.Desc), id}
+	fc := &fcClient{ac, rsp.Desc, id, nil, nil}
 	ac.funcs[id] = fc
 	return fc, nil
 }

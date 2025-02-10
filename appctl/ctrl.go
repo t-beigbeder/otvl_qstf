@@ -134,9 +134,11 @@ type ReqDesc struct {
 
 func GetReqDesc(cmd string) *ReqDesc {
 	reqDescs := map[string]ReqDesc{
-		CmdAddIStream:  {func() any { return &AddStreamReqMsg{} }, func() any { return &RespMsg{} }},
-		CmdAddOStream:  {func() any { return &AddStreamReqMsg{} }, func() any { return &RespMsg{} }},
-		CmdNewFunction: {func() any { return &NewFunctionReqMsg{} }, func() any { return &NewFunctionRespMsg{} }},
+		CmdAddIStream:     {func() any { return &AddStreamReqMsg{} }, func() any { return &RespMsg{} }},
+		CmdAddOStream:     {func() any { return &AddStreamReqMsg{} }, func() any { return &RespMsg{} }},
+		CmdNewFunction:    {func() any { return &NewFunctionReqMsg{} }, func() any { return &NewFunctionRespMsg{} }},
+		CmdFuncAddIStream: {func() any { return &FuncAddStreamReqMsg{} }, func() any { return &RespMsg{} }},
+		CmdFuncAddOStream: {func() any { return &FuncAddStreamReqMsg{} }, func() any { return &RespMsg{} }},
 	}
 	rd, ok := reqDescs[cmd]
 	if !ok {

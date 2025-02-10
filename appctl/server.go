@@ -20,6 +20,7 @@ type AppServerCnc interface {
 }
 
 type appServerCnc struct {
+	ctx context.Context
 	cnc Connection
 	cat *FunctionCatalog
 }
@@ -76,6 +77,10 @@ func (ac *appServerCnc) Handle() error {
 		ac.controlWorkload(cmd, rid, areq, addIStream)
 	case CmdNewFunction:
 		ac.controlWorkload(cmd, rid, areq, newFunction)
+	case CmdFuncAddIStream:
+		ac.controlWorkload(cmd, rid, areq, funcAddIStream)
+	case CmdFuncAddOStream:
+		ac.controlWorkload(cmd, rid, areq, funcAddOStream)
 	default:
 		ac.GetLogger().Error("Unknown command", "cmd", cmd)
 		return ac.respError(rid, fmt.Errorf("unknown command: %s", cmd))
@@ -171,7 +176,7 @@ func (ac *appServerCnc) respError(rid uint64, err error) error {
 	return nil
 }
 
-func getOStream(ac *appServerCnc, rid uint64, areq any) (any, []byte) {
+func getOStream(ac *appServerCnc, _ uint64, areq any) (any, []byte) {
 	req, _ := areq.(*AddStreamReqMsg)
 	_, err := ac.cnc.AddOStream(req.StreamId)
 	rsp := &RespMsg{}
@@ -181,7 +186,7 @@ func getOStream(ac *appServerCnc, rid uint64, areq any) (any, []byte) {
 	return rsp, nil
 }
 
-func addIStream(ac *appServerCnc, rid uint64, areq any) (any, []byte) {
+func addIStream(ac *appServerCnc, _ uint64, areq any) (any, []byte) {
 	req, _ := areq.(*AddStreamReqMsg)
 	_, err := ac.cnc.AddIStream(req.StreamId)
 	rsp := &RespMsg{}
@@ -191,8 +196,113 @@ func addIStream(ac *appServerCnc, rid uint64, areq any) (any, []byte) {
 	return rsp, nil
 }
 
-func newFunction(ac *appServerCnc, rid uint64, areq any) (any, []byte) {
-	return nil, nil
+func newFunction(ac *appServerCnc, _ uint64, areq any) (arsp any, _ []byte) {
+	req, _ := areq.(*NewFunctionReqMsg)
+	rsp := &NewFunctionRespMsg{}
+	arsp = rsp
+	fd, sw, wf, sths, err := ac.cat.GetFunction(req.FdName)
+	if err != nil {
+		rsp.Error = err.Error()
+		return
+	}
+	if wf != nil {
+		rsp.Error = fmt.Sprintf("Function %s is wrapped and must be run with RunSyncFunction", fd.Name)
+		return
+	}
+	if sw == nil {
+		rsp.Error = fmt.Sprintf("Function %s cannot be run as it doesn't have StartWaiter interface defined", fd.Name)
+		return
+	}
+	opts := []stf.FcOption{stf.FcId(req.FuncId)}
+	if fd.Terminable {
+		opts = append(opts, stf.FcTerminable(true))
+	}
+	values := make(map[string]any)
+	fcCtx := context.WithValue(ac.ctx, "values", values)
+	fc, err := stf.NewFunction(fcCtx, sw, opts...)
+	if err != nil {
+		rsp.Error = err.Error()
+		return
+	}
+	values["fc"] = fc
+	err = ac.cnc.NewFunction(req.FuncId, fc, fd, sths)
+
+	rsp.Desc = *fd
+	return rsp, nil
+}
+
+func funcAddIStream(ac *appServerCnc, _ uint64, areq any) (arsp any, _ []byte) {
+	req, _ := areq.(*FuncAddStreamReqMsg)
+	rsp := &RespMsg{}
+	arsp = rsp
+	fc, fd, sths := ac.cnc.GetFunction(req.FuncId)
+	if fc == nil || fd == nil {
+		rsp.Error = fmt.Sprintf("Function %s does not exist", req.FuncId)
+		return
+	}
+	is := ac.cnc.GetIStream(req.StreamId)
+	if is == nil {
+		rsp.Error = fmt.Sprintf("Stream in %s does not exist", req.StreamId)
+		return
+	}
+	if len(fc.GetInStreams()) >= len(fd.IStreams) {
+		rsp.Error = fmt.Sprintf("Stream in %s has no descriptor", req.StreamId)
+		return
+	}
+	opts := []stf.IstOption{stf.IstId(req.StreamId)}
+	stx := len(fc.GetInStreams())
+	opts = append(opts, stf.IstDiscrete(fd.IStreams[stx].Discrete))
+	opts = append(opts, stf.IstMaxNb(fd.IStreams[stx].MaxNb))
+	isths := sths.ihs[stx]
+	if isths.BSet != nil {
+		opts = append(opts, stf.IstBSet(isths.BSet))
+	}
+	if isths.ASet != nil {
+		opts = append(opts, stf.IstASet(isths.Unmarshal, isths.NewASet, isths.ASet))
+	}
+	_, err := fc.AddInStream(is, opts...)
+	if err != nil {
+		rsp.Error = err.Error()
+		return
+	}
+	return rsp, nil
+}
+
+func funcAddOStream(ac *appServerCnc, _ uint64, areq any) (arsp any, _ []byte) {
+	req, _ := areq.(*FuncAddStreamReqMsg)
+	rsp := &RespMsg{}
+	arsp = rsp
+	fc, fd, sths := ac.cnc.GetFunction(req.FuncId)
+	if fc == nil || fd == nil {
+		rsp.Error = fmt.Sprintf("Function %s does not exist", req.FuncId)
+		return
+	}
+	os := ac.cnc.GetOStream(req.StreamId)
+	if os == nil {
+		rsp.Error = fmt.Sprintf("Stream out %s does not exist", req.StreamId)
+		return
+	}
+	if len(fc.GetOutStreams()) >= len(fd.OStreams) {
+		rsp.Error = fmt.Sprintf("Stream out %s has no descriptor", req.StreamId)
+		return
+	}
+	opts := []stf.OstOption{stf.OstId(req.StreamId)}
+	stx := len(fc.GetOutStreams())
+	opts = append(opts, stf.OstDiscrete(fd.OStreams[stx].Discrete))
+	opts = append(opts, stf.OstMaxNb(fd.OStreams[stx].MaxNb))
+	osths := sths.ohs[stx]
+	if osths.BGet != nil {
+		opts = append(opts, stf.OstBGet(osths.BGet))
+	}
+	if osths.AGet != nil {
+		opts = append(opts, stf.OstAGet(osths.AGet, osths.Marshaller))
+	}
+	_, err := fc.AddOutStream(os, opts...)
+	if err != nil {
+		rsp.Error = err.Error()
+		return
+	}
+	return rsp, nil
 }
 
 func (ac *appServerCnc) RunSyncFunction(fName string) error {
@@ -235,7 +345,7 @@ type FcServer interface {
 
 type AppServer interface {
 	Catalog() *FunctionCatalog
-	NewCnc(qc quic.Connection)
+	NewCnc(ctx context.Context, qc quic.Connection)
 }
 
 type appServer struct {
@@ -251,7 +361,7 @@ func (as *appServer) Catalog() *FunctionCatalog {
 	return as.cat
 }
 
-func (as *appServer) NewCnc(qc quic.Connection) {
+func (as *appServer) NewCnc(ctx context.Context, qc quic.Connection) {
 	var err error
 	id := qc.RemoteAddr().String()
 	cnc := NewConnection(as.ctx, qc, id, true, true, as.logger)
@@ -266,6 +376,7 @@ func (as *appServer) NewCnc(qc quic.Connection) {
 	//	return
 	//}
 	ac := &appServerCnc{
+		ctx: ctx,
 		cnc: cnc,
 		cat: as.cat,
 	}
@@ -307,6 +418,6 @@ func RunAppServer(
 			logger.Info("RunAppServer: accept error", "err", lErr)
 			continue
 		}
-		go as.NewCnc(qc)
+		go as.NewCnc(ctx, qc)
 	}
 }

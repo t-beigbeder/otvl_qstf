@@ -27,8 +27,8 @@ type Connection interface {
 	AddOStream(id string) (OStream, error)
 	GetIStream(id string) IStream
 	GetOStream(id string) OStream
-	//NewFunction(id string, fc stf.Function, fd *FunctionDesc, sths *StreamHandlers) error
-	//GetFunction(id string) (stf.Function, *FunctionDesc, *StreamHandlers)
+	NewFunction(id string, fc stf.Function, fd *FunctionDesc, sths *StreamHandlers) error
+	GetFunction(id string) (stf.Function, *FunctionDesc, *StreamHandlers)
 }
 
 type connection struct {
@@ -186,7 +186,7 @@ func (c *connection) GetOStream(id string) OStream {
 	return os
 }
 
-func (c *connection) fxNewFunction(id string, fc stf.Function, fd *FunctionDesc, sths *StreamHandlers) error {
+func (c *connection) NewFunction(id string, fc stf.Function, fd *FunctionDesc, sths *StreamHandlers) error {
 	c.mmux.Lock()
 	defer c.mmux.Unlock()
 	_, ok := c.funcs[id]
@@ -200,7 +200,7 @@ func (c *connection) fxNewFunction(id string, fc stf.Function, fd *FunctionDesc,
 	return nil
 }
 
-func (c *connection) fxGetFunction(id string) (stf.Function, *FunctionDesc, *StreamHandlers) {
+func (c *connection) GetFunction(id string) (stf.Function, *FunctionDesc, *StreamHandlers) {
 	fc, _ := c.funcs[id]
 	fd, _ := c.fds[id]
 	sths, _ := c.sthss[id]

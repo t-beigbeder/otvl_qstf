@@ -15,12 +15,12 @@ type StreamDesc struct {
 }
 
 type IStreamDesc struct {
-	StreamDesc `json:"-"`
+	StreamDesc `json:""`
 	BSize      int `json:"bsize"`
 }
 
 type OStreamDesc struct {
-	StreamDesc `json:"-"`
+	StreamDesc `json:""`
 }
 
 type FunctionDesc struct {

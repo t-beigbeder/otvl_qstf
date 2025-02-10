@@ -22,7 +22,7 @@ func RunTestServer(initializer func(AppServer)) (string, context.CancelFunc, err
 					initializer(as)
 				}
 			}
-			as.NewCnc(qc)
+			as.NewCnc(ctx, qc)
 		}, GetLoggerFor("server"))
 	return port, cancel, err
 }
