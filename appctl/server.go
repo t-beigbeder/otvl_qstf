@@ -141,16 +141,20 @@ func (ac *appServerCnc) sendCtrl(rid uint64, rsp any, payload []byte) error {
 	if err != nil {
 		return err
 	}
-	ln := 12 + len(js)
+	ln := 16 + len(js)
 	if payload != nil {
-		ln += 4 + len(payload)
+		ln += len(payload)
 	}
 	bs := make([]byte, ln)
 	SetRidBs(rid, bs)
 	SetLenBs(uint32(len(js)), bs[8:])
-	copy(bs[12:], js)
+	lpl := 0
 	if payload != nil {
-		SetLenBs(uint32(len(payload)), bs[12+len(js):])
+		lpl = len(payload)
+	}
+	SetLenBs(uint32(lpl), bs[12:])
+	copy(bs[16:], js)
+	if payload != nil {
 		copy(bs[16+len(js):], payload)
 	}
 	_, err = ac.cnc.GetCtrlStream().Write(bs)

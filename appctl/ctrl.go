@@ -47,6 +47,7 @@ func (lbs LenBs) String() string {
 }
 
 type RspData struct {
+	Rid     uint64
 	Err     error
 	Rsp     any
 	Payload any
