@@ -5,13 +5,14 @@ import (
 	"context"
 	"fmt"
 	"github.com/stretchr/testify/require"
+	"github.com/t-beigbeder/otvl_qstf/internal/bfio"
 	"testing"
 )
 
 func TestNewLocalCommandBasic(t *testing.T) {
 	stdin := bytes.NewReader([]byte("hello world"))
-	stdout := newBufWr()
-	stderr := newBufWr()
+	stdout := bfio.NewBufWr()
+	stderr := bfio.NewBufWr()
 	cs := CommandSpec{
 		Cmd: "cat",
 	}
@@ -23,18 +24,16 @@ func TestNewLocalCommandBasic(t *testing.T) {
 	require.NoError(t, err)
 	err = lcfc.Run()
 	require.NoError(t, err)
-	res, err := fromBufWr(stdout)
-	require.NoError(t, err)
+	res := stdout.Bytes()
 	require.Equal(t, "hello world", string(res))
-	res, err = fromBufWr(stderr)
-	require.NoError(t, err)
+	res = stderr.Bytes()
 	require.Nil(t, res)
 }
 
 func TestNewLocalCommandIO(t *testing.T) {
 	stdin := bytes.NewReader([]byte("hello world\n"))
-	stdout := newBufWr()
-	stderr := newBufWr()
+	stdout := bfio.NewBufWr()
+	stderr := bfio.NewBufWr()
 	cs := CommandSpec{
 		Cmd:  "grep",
 		Args: []string{"o w"},
@@ -47,18 +46,16 @@ func TestNewLocalCommandIO(t *testing.T) {
 	require.NoError(t, err)
 	err = lcfc.Run()
 	require.NoError(t, err)
-	res, err := fromBufWr(stdout)
-	require.NoError(t, err)
+	res := stdout.Bytes()
 	require.Equal(t, "hello world\n", string(res))
-	res, err = fromBufWr(stderr)
-	require.NoError(t, err)
+	res = stderr.Bytes()
 	require.Nil(t, res)
 }
 
 func TestNewLocalCommandStderr(t *testing.T) {
 	stdin := bytes.NewReader(nil)
-	stdout := newBufWr()
-	stderr := newBufWr()
+	stdout := bfio.NewBufWr()
+	stderr := bfio.NewBufWr()
 	cs := CommandSpec{
 		Cmd:  "sh",
 		Args: []string{"-c", "echo hello world >&2"},
@@ -71,11 +68,9 @@ func TestNewLocalCommandStderr(t *testing.T) {
 	require.NoError(t, err)
 	err = lcfc.Run()
 	require.NoError(t, err)
-	res, err := fromBufWr(stdout)
-	require.NoError(t, err)
+	res := stdout.Bytes()
 	require.Nil(t, res)
-	res, err = fromBufWr(stderr)
-	require.NoError(t, err)
+	res = stderr.Bytes()
 	require.Equal(t, "hello world\n", string(res))
 }
 
@@ -85,8 +80,8 @@ func TestNewLocalCommandLarge(t *testing.T) {
 		instr += fmt.Sprintf("hello world #%d\n", i)
 	}
 	stdin := bytes.NewReader([]byte(instr))
-	stdout := newBufWr()
-	stderr := newBufWr()
+	stdout := bfio.NewBufWr()
+	stderr := bfio.NewBufWr()
 	cs := CommandSpec{
 		Cmd: "cat",
 	}
@@ -98,11 +93,9 @@ func TestNewLocalCommandLarge(t *testing.T) {
 	require.NoError(t, err)
 	err = lcfc.Run()
 	require.NoError(t, err)
-	res, err := fromBufWr(stdout)
-	require.NoError(t, err)
+	res := stdout.Bytes()
 	require.Equal(t, instr, string(res))
-	res, err = fromBufWr(stderr)
-	require.NoError(t, err)
+	res = stderr.Bytes()
 	require.Nil(t, res)
 }
 
@@ -112,8 +105,8 @@ func TestNewLocalCommandLong(t *testing.T) {
 		instr += fmt.Sprintf("hello world #%d\n", i)
 	}
 	stdin := bytes.NewReader([]byte(instr))
-	stdout := newBufWr()
-	stderr := newBufWr()
+	stdout := bfio.NewBufWr()
+	stderr := bfio.NewBufWr()
 	cs := CommandSpec{
 		Cmd:  "sh",
 		Args: []string{"-c", "cat && sleep 0.2"},
@@ -126,10 +119,8 @@ func TestNewLocalCommandLong(t *testing.T) {
 	require.NoError(t, err)
 	err = lcfc.Run()
 	require.NoError(t, err)
-	res, err := fromBufWr(stdout)
-	require.NoError(t, err)
+	res := stdout.Bytes()
 	require.Equal(t, instr, string(res))
-	res, err = fromBufWr(stderr)
-	require.NoError(t, err)
+	res = stderr.Bytes()
 	require.Nil(t, res)
 }

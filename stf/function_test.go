@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/stretchr/testify/require"
+	"github.com/t-beigbeder/otvl_qstf/internal/bfio"
 	"testing"
 	"time"
 )
@@ -37,7 +38,7 @@ func TestTerminable(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	out := newBufWr()
+	out := bfio.NewBufWr()
 	oss, err := fc.AddOutStream(out, OstDiscrete(true),
 		OstBGet(
 			func(_ context.Context) ([]byte, error) {

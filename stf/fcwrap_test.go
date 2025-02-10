@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/stretchr/testify/require"
+	"github.com/t-beigbeder/otvl_qstf/internal/bfio"
 	"testing"
 	"time"
 )
@@ -13,7 +14,7 @@ func TestNewSyncFuncWrapperBasic(t *testing.T) {
 	wbs, err := toJsonBytes("value for test")
 	require.NoError(t, err)
 	in := bytes.NewReader(wbs)
-	out := newBufWr()
+	out := bfio.NewBufWr()
 	fcw, err := NewSyncFuncWrapper(context.Background(),
 		WrappedFunction{
 			func() any { v := ""; return &v },
@@ -34,7 +35,7 @@ func TestNewSyncFuncWrapperSlow(t *testing.T) {
 	wbs, err := toJsonBytes("value for test")
 	require.NoError(t, err)
 	in := bytes.NewReader(wbs)
-	out := newBufWr()
+	out := bfio.NewBufWr()
 	fcw, err := NewSyncFuncWrapper(context.Background(),
 		WrappedFunction{
 			func() any { v := ""; return &v },
@@ -64,7 +65,7 @@ func TestNewSyncFuncWrapperLarge(t *testing.T) {
 	wbs, err := toJsonBytes(din)
 	require.NoError(t, err)
 	in := bytes.NewReader(wbs)
-	out := newBufWr()
+	out := bfio.NewBufWr()
 	fcw, err := NewSyncFuncWrapper(context.Background(),
 		WrappedFunction{
 			func() any {

@@ -26,38 +26,44 @@ type appServerCnc struct {
 
 func (ac *appServerCnc) recvCtrl() (rid uint64, cmd string, req any, payload []byte, err error) {
 	stream := ac.cnc.GetCtrlStream()
-	bs := make([]byte, 12)
-	if _, err = io.ReadFull(stream, bs); err != nil {
+	hbs := make([]byte, 20)
+	if _, err = io.ReadFull(stream, hbs); err != nil {
 		return
 	}
-	rid = RidBs(bs[:]).Get()
-	lCmd := LenBs(bs[8:]).Get()
+	rid = RidBs(hbs[:]).Get()
+	lCmd := LenBs(hbs[8:]).Get()
 	if lCmd > MaxReqSize {
 		err = fmt.Errorf("request too large (%d > %d)", lCmd, MaxReqSize)
 		return
 	}
-	bs = make([]byte, lCmd+4)
-	if _, err = io.ReadFull(stream, bs); err != nil {
-		return
-	}
-	cmd = string(bs[:lCmd])
-	lnRq := LenBs(bs[lCmd:]).Get()
+	lnRq := LenBs(hbs[12:]).Get()
 	if lnRq > MaxReqSize {
 		err = fmt.Errorf("request too large (%d > %d)", lnRq, MaxReqSize)
 		return
 	}
-	bs = make([]byte, lnRq)
-	if _, err = io.ReadFull(stream, bs); err != nil {
+	lnPl := LenBs(hbs[16:]).Get()
+	if lnPl > MaxReqSize {
+		err = fmt.Errorf("request too large (%d > %d)", lnPl, MaxReqSize)
 		return
 	}
+
+	data := make([]byte, lCmd+lnRq+lnPl)
+	if _, err = io.ReadFull(stream, data); err != nil {
+		return
+	}
+	cmd = string(data[:lCmd])
+	rbq := data[lCmd : lCmd+lnRq]
 	rd := GetReqDesc(cmd)
 	if rd == nil {
 		err = fmt.Errorf("unknown command: %s", cmd)
 		return
 	}
 	req = rd.Req()
-	if err = json.Unmarshal(bs, &req); err != nil {
+	if err = json.Unmarshal(rbq, &req); err != nil {
 		return
+	}
+	if lnPl != 0 {
+		payload = data[lCmd+lnRq:]
 	}
 	return
 }
@@ -67,21 +73,22 @@ func (ac *appServerCnc) Handle() error {
 	if err != nil {
 		return err
 	}
-	_, _, _, _ = rid, cmd, areq, payload
 	ac.GetLogger().Info("Received request", "cmd", cmd, "req", areq, "rid", rid)
 	switch cmd {
 	case CmdAddOStream:
-		ac.controlWorkload(cmd, rid, areq, getOStream)
+		ac.controlWorkload(cmd, rid, areq, nil, getOStream)
 	case CmdAddIStream:
-		ac.controlWorkload(cmd, rid, areq, addIStream)
+		ac.controlWorkload(cmd, rid, areq, nil, addIStream)
+	case CmdRunSyncFunction:
+		ac.controlWorkload(cmd, rid, areq, payload, runSyncFunction)
 	case CmdNewFunction:
-		ac.controlWorkload(cmd, rid, areq, newFunction)
+		ac.controlWorkload(cmd, rid, areq, nil, newFunction)
 	case CmdFuncAddIStream:
-		ac.controlWorkload(cmd, rid, areq, funcAddIStream)
+		ac.controlWorkload(cmd, rid, areq, nil, funcAddIStream)
 	case CmdFuncAddOStream:
-		ac.controlWorkload(cmd, rid, areq, funcAddOStream)
+		ac.controlWorkload(cmd, rid, areq, nil, funcAddOStream)
 	case CmdFuncOper:
-		ac.controlWorkload(cmd, rid, areq, funcOper)
+		ac.controlWorkload(cmd, rid, areq, nil, funcOper)
 	default:
 		ac.GetLogger().Error("Unknown command", "cmd", cmd)
 		return ac.respError(rid, fmt.Errorf("unknown command: %s", cmd))
@@ -97,9 +104,9 @@ func (ac *appServerCnc) Close(err error) error {
 	return ac.cnc.GetQuicConnection().CloseWithError(0, sErr)
 }
 
-func (ac *appServerCnc) controlWorkload(cmd string, rid uint64, areq any, workload func(ac *appServerCnc, rid uint64, areq any) (any, []byte)) {
+func (ac *appServerCnc) controlWorkload(cmd string, rid uint64, areq any, payload []byte, workload func(ac *appServerCnc, rid uint64, areq any, payload []byte) (any, []byte)) {
 	go func() {
-		arsp, payload := workload(ac, rid, areq)
+		arsp, payload := workload(ac, rid, areq, payload)
 		err := ac.sendCtrl(rid, arsp, payload)
 		if err != nil {
 			ac.GetLogger().Error("Failed to send control response for workload", "cmd", cmd, "rid", rid, "err", err)
@@ -144,7 +151,7 @@ func (ac *appServerCnc) respError(rid uint64, err error) error {
 	return nil
 }
 
-func getOStream(ac *appServerCnc, _ uint64, areq any) (any, []byte) {
+func getOStream(ac *appServerCnc, _ uint64, areq any, _ []byte) (any, []byte) {
 	req, _ := areq.(*AddStreamReqMsg)
 	_, err := ac.cnc.AddOStream(req.StreamId)
 	rsp := &RespMsg{}
@@ -154,7 +161,7 @@ func getOStream(ac *appServerCnc, _ uint64, areq any) (any, []byte) {
 	return rsp, nil
 }
 
-func addIStream(ac *appServerCnc, _ uint64, areq any) (any, []byte) {
+func addIStream(ac *appServerCnc, _ uint64, areq any, _ []byte) (any, []byte) {
 	req, _ := areq.(*AddStreamReqMsg)
 	_, err := ac.cnc.AddIStream(req.StreamId)
 	rsp := &RespMsg{}
@@ -164,7 +171,33 @@ func addIStream(ac *appServerCnc, _ uint64, areq any) (any, []byte) {
 	return rsp, nil
 }
 
-func newFunction(ac *appServerCnc, _ uint64, areq any) (arsp any, _ []byte) {
+func runSyncFunction(ac *appServerCnc, _ uint64, areq any, rqPl []byte) (arsp any, rsPl []byte) {
+	req, _ := areq.(*RunSyncFunctionReqMsg)
+	rsp := &RespMsg{}
+	arsp = rsp
+	_, _, wf, _, err := ac.cat.GetFunction(req.FdName)
+	if err != nil {
+		rsp.Error = err.Error()
+		return
+	}
+	if wf == nil {
+		rsp.Error = fmt.Sprintf("function %s has no wrapped function, currently not supported", req.FdName)
+		return
+	}
+	fw, err := stf.NewSyncFuncWrapper(
+		ac.cnc.GetCtx(),
+		*wf,
+		ac.cnc.GetSyncStream(),
+		ac.cnc.GetSyncStream(),
+	)
+
+	if err != nil {
+		rsp.Error = err.Error()
+	}
+	return rsp, nil
+}
+
+func newFunction(ac *appServerCnc, _ uint64, areq any, _ []byte) (arsp any, _ []byte) {
 	req, _ := areq.(*NewFunctionReqMsg)
 	rsp := &NewFunctionRespMsg{}
 	arsp = rsp
@@ -199,7 +232,7 @@ func newFunction(ac *appServerCnc, _ uint64, areq any) (arsp any, _ []byte) {
 	return rsp, nil
 }
 
-func funcAddIStream(ac *appServerCnc, _ uint64, areq any) (arsp any, _ []byte) {
+func funcAddIStream(ac *appServerCnc, _ uint64, areq any, _ []byte) (arsp any, _ []byte) {
 	req, _ := areq.(*FuncAddStreamReqMsg)
 	rsp := &RespMsg{}
 	arsp = rsp
@@ -236,7 +269,7 @@ func funcAddIStream(ac *appServerCnc, _ uint64, areq any) (arsp any, _ []byte) {
 	return rsp, nil
 }
 
-func funcAddOStream(ac *appServerCnc, _ uint64, areq any) (arsp any, _ []byte) {
+func funcAddOStream(ac *appServerCnc, _ uint64, areq any, _ []byte) (arsp any, _ []byte) {
 	req, _ := areq.(*FuncAddStreamReqMsg)
 	rsp := &RespMsg{}
 	arsp = rsp
@@ -273,7 +306,7 @@ func funcAddOStream(ac *appServerCnc, _ uint64, areq any) (arsp any, _ []byte) {
 	return rsp, nil
 }
 
-func funcOper(ac *appServerCnc, _ uint64, areq any) (arsp any, _ []byte) {
+func funcOper(ac *appServerCnc, _ uint64, areq any, _ []byte) (arsp any, _ []byte) {
 	req, _ := areq.(*FuncOperReqMsg)
 	rsp := &RespMsg{}
 	arsp = rsp

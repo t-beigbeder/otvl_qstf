@@ -90,13 +90,8 @@ type AddStreamReqMsg struct {
 }
 
 type RunSyncFunctionReqMsg struct {
-	FuncId  string `json:"funcId"`
-	InPlLen int    `json:"inPlLen"`
-}
-
-type RunSyncFunctionRespMsg struct {
-	Error    string `json:"error"`
-	OutPlLen int    `json:"outPlLen"`
+	FdName string `json:"fdName"`
+	FuncId string `json:"funcId"`
 }
 
 type NewFunctionReqMsg struct {
@@ -134,12 +129,13 @@ type ReqDesc struct {
 
 func GetReqDesc(cmd string) *ReqDesc {
 	reqDescs := map[string]ReqDesc{
-		CmdAddIStream:     {func() any { return &AddStreamReqMsg{} }, func() any { return &RespMsg{} }},
-		CmdAddOStream:     {func() any { return &AddStreamReqMsg{} }, func() any { return &RespMsg{} }},
-		CmdNewFunction:    {func() any { return &NewFunctionReqMsg{} }, func() any { return &NewFunctionRespMsg{} }},
-		CmdFuncAddIStream: {func() any { return &FuncAddStreamReqMsg{} }, func() any { return &RespMsg{} }},
-		CmdFuncAddOStream: {func() any { return &FuncAddStreamReqMsg{} }, func() any { return &RespMsg{} }},
-		CmdFuncOper:       {func() any { return &FuncOperReqMsg{} }, func() any { return &RespMsg{} }},
+		CmdAddIStream:      {func() any { return &AddStreamReqMsg{} }, func() any { return &RespMsg{} }},
+		CmdAddOStream:      {func() any { return &AddStreamReqMsg{} }, func() any { return &RespMsg{} }},
+		CmdRunSyncFunction: {func() any { return &RunSyncFunctionReqMsg{} }, func() any { return &RespMsg{} }},
+		CmdNewFunction:     {func() any { return &NewFunctionReqMsg{} }, func() any { return &NewFunctionRespMsg{} }},
+		CmdFuncAddIStream:  {func() any { return &FuncAddStreamReqMsg{} }, func() any { return &RespMsg{} }},
+		CmdFuncAddOStream:  {func() any { return &FuncAddStreamReqMsg{} }, func() any { return &RespMsg{} }},
+		CmdFuncOper:        {func() any { return &FuncOperReqMsg{} }, func() any { return &RespMsg{} }},
 	}
 	rd, ok := reqDescs[cmd]
 	if !ok {

@@ -58,7 +58,7 @@ func (fc *fcClient) AddIStream(is IStream) error {
 	ac := fc.ac
 	rqDc := ac.launchBg(
 		func(rid uint64, req, rqPl, rsp, rspPl any) error {
-			err := ac.sendCtrl(rid, CmdFuncAddIStream, req)
+			err := ac.sendCtrl(rid, CmdFuncAddIStream, req, nil)
 			if err != nil {
 				return err
 			}
@@ -97,7 +97,7 @@ func (fc *fcClient) AddOStream(os OStream) error {
 	ac := fc.ac
 	rqDc := ac.launchBg(
 		func(rid uint64, req, rqPl, rsp, rspPl any) error {
-			err := ac.sendCtrl(rid, CmdFuncAddOStream, req)
+			err := ac.sendCtrl(rid, CmdFuncAddOStream, req, nil)
 			if err != nil {
 				return err
 			}
@@ -125,7 +125,7 @@ func (fc *fcClient) funcOper(oper string) error {
 	ac := fc.ac
 	rqDc := ac.launchBg(
 		func(rid uint64, req, rqPl, rsp, rspPl any) error {
-			err := ac.sendCtrl(rid, CmdFuncOper, req)
+			err := ac.sendCtrl(rid, CmdFuncOper, req, nil)
 			if err != nil {
 				return err
 			}
@@ -167,7 +167,7 @@ func (fc *fcClient) Terminate() error {
 type AppClient interface {
 	AddIStream(id string) (OStream, error)
 	GetOStream(id string) (IStream, error)
-	RunSyncFunction(fName string, in any, out any) error
+	RunSyncFunction(fName string, id string, in any, out any) error
 	NewFunction(fName string, id string) (FcClient, error)
 	GetFunction(id string) FcClient
 }
@@ -265,17 +265,21 @@ func (ac *appClient) lstnCtrl() {
 	}
 }
 
-func (ac *appClient) sendCtrl(rid uint64, cmd string, req any) error {
+func (ac *appClient) sendCtrl(rid uint64, cmd string, req any, payload []byte) error {
 	js, err := json.Marshal(req)
 	if err != nil {
 		return err
 	}
-	bs := make([]byte, 8+4+len(cmd)+4+len(js))
+	bs := make([]byte, 8+4+4+4+len(cmd)+len(js)+len(payload))
 	SetRidBs(rid, bs)
 	SetLenBs(uint32(len(cmd)), bs[8:])
-	copy(bs[12:], cmd)
-	SetLenBs(uint32(len(js)), bs[12+len(cmd):])
-	copy(bs[16+len(cmd):], js)
+	SetLenBs(uint32(len(js)), bs[12:])
+	SetLenBs(uint32(len(payload)), bs[16:])
+	copy(bs[20:], cmd)
+	copy(bs[20+len(cmd):], js)
+	if payload != nil {
+		copy(bs[20+len(cmd)+len(js):], payload)
+	}
 	_, err = ac.cnc.GetCtrlStream().Write(bs)
 	if err != nil {
 		return err
@@ -345,7 +349,7 @@ func (ac *appClient) AddIStream(id string) (OStream, error) {
 	var os OStream
 	rqDc := ac.launchBg(
 		func(rid uint64, req, _, rsp, _ any) error {
-			err := ac.sendCtrl(rid, CmdAddOStream, req)
+			err := ac.sendCtrl(rid, CmdAddOStream, req, nil)
 			if err != nil {
 				return err
 			}
@@ -380,7 +384,7 @@ func (ac *appClient) GetOStream(id string) (IStream, error) {
 	var is IStream
 	rqDc := ac.launchBg(
 		func(rid uint64, req, _, rsp, _ any) error {
-			err := ac.sendCtrl(rid, CmdAddIStream, req)
+			err := ac.sendCtrl(rid, CmdAddIStream, req, nil)
 			if err != nil {
 				return err
 			}
@@ -406,8 +410,38 @@ func (ac *appClient) GetOStream(id string) (IStream, error) {
 	return is, nil
 }
 
-func (ac *appClient) RunSyncFunction(fName string, in any, out any) error {
-	return errors.New("not yet implemented")
+func (ac *appClient) RunSyncFunction(fName string, id string, in any, out any) error {
+	if id == "" {
+		id = NextId(fmt.Sprintf("/%s/fc", fName))
+	}
+	req := RunSyncFunctionReqMsg{FdName: fName, FuncId: id}
+	rsp := RespMsg{}
+	rqDc := ac.launchBg(
+		func(rid uint64, req, rqPl, rsp, rspPl any) error {
+			rqPlBs, err := json.Marshal(rqPl)
+			if err != nil {
+				return err
+			}
+			err = ac.sendCtrl(rid, CmdRunSyncFunction, req, rqPlBs)
+			if err != nil {
+				return err
+			}
+			return nil
+		},
+		&req, in, &rsp, out,
+	)
+	rspData := <-rqDc
+	if rspData.Err != nil {
+		return rspData.Err
+	}
+	arsp, ok := rspData.Rsp.(*RespMsg)
+	if !ok {
+		return fmt.Errorf("unexpected rsp type: %T", rspData.Rsp)
+	}
+	if arsp.Error != "" {
+		return errors.New(arsp.Error)
+	}
+	return nil
 }
 
 func (ac *appClient) NewFunction(fName string, id string) (FcClient, error) {
@@ -418,7 +452,7 @@ func (ac *appClient) NewFunction(fName string, id string) (FcClient, error) {
 	rsp := NewFunctionRespMsg{}
 	rqDc := ac.launchBg(
 		func(rid uint64, req, rqPl, rsp, rspPl any) error {
-			err := ac.sendCtrl(rid, CmdNewFunction, req)
+			err := ac.sendCtrl(rid, CmdNewFunction, req, nil)
 			if err != nil {
 				return err
 			}

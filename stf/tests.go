@@ -1,12 +1,10 @@
 package stf
 
 import (
-	"bufio"
-	"bytes"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"io"
+	"github.com/t-beigbeder/otvl_qstf/internal/bfio"
 )
 
 func toJsonBytes(a any) ([]byte, error) {
@@ -20,36 +18,8 @@ func toJsonBytes(a any) ([]byte, error) {
 	return wbs, err
 }
 
-type bufWr struct {
-	buf *bytes.Buffer
-	out *bufio.Writer
-}
-
-var _ io.Writer = &bufWr{}
-
-func (b *bufWr) Write(p []byte) (n int, err error) {
-	return b.buf.Write(p)
-}
-
-func newBufWr() io.Writer {
-	var buf bytes.Buffer
-	return &bufWr{buf: &buf, out: bufio.NewWriter(&buf)}
-}
-
-func fromBufWr(wr io.Writer) ([]byte, error) {
-	b, ok := wr.(*bufWr)
-	if !ok {
-		return nil, fmt.Errorf("expected bufWr got %T", wr)
-	}
-	return b.buf.Bytes(), nil
-}
-
-func fromJsonBytes(wr io.Writer, a any) error {
-	o, ok := wr.(*bufWr)
-	if !ok {
-		return fmt.Errorf("expected bufWr got %T", wr)
-	}
-	obs := o.buf.Bytes()
+func fromJsonBytes(wr bfio.BufWriter, a any) error {
+	obs := wr.Bytes()
 	bln := binary.BigEndian.Uint32(obs[0:4])
 	if bln != uint32(len(obs)-4) {
 		return fmt.Errorf("invalid number of bytes read: expected %d got %d", len(obs)-4, bln)
