@@ -15,7 +15,6 @@ import (
 type AppServerCnc interface {
 	Handle() error
 	Close(error) error
-	RunSyncFunction(funcId string) error
 	GetLogger() *slog.Logger
 }
 
@@ -81,6 +80,8 @@ func (ac *appServerCnc) Handle() error {
 		ac.controlWorkload(cmd, rid, areq, funcAddIStream)
 	case CmdFuncAddOStream:
 		ac.controlWorkload(cmd, rid, areq, funcAddOStream)
+	case CmdFuncOper:
+		ac.controlWorkload(cmd, rid, areq, funcOper)
 	default:
 		ac.GetLogger().Error("Unknown command", "cmd", cmd)
 		return ac.respError(rid, fmt.Errorf("unknown command: %s", cmd))
@@ -94,39 +95,6 @@ func (ac *appServerCnc) Close(err error) error {
 		sErr = err.Error()
 	}
 	return ac.cnc.GetQuicConnection().CloseWithError(0, sErr)
-}
-
-//func (ac *appServerCnc) sendRsp(err error) error {
-//	sErr := ""
-//	if err != nil {
-//		sErr = err.Error()
-//	}
-//	crsm := CtrlRspMsg{Error: sErr}
-//	bs, err := json.Marshal(crsm)
-//	if err != nil {
-//		return err
-//	}
-//	wbs := make([]byte, len(bs)+4)
-//	binary.BigEndian.PutUint32(wbs, uint32(len(bs)))
-//	copy(wbs[4:], bs)
-//	stream := ac.cnc.GetCtrlStream()
-//	if _, err = stream.Write(wbs); err != nil {
-//		return err
-//	}
-//	return nil
-//}
-//
-//func (ac *appServerCnc) runAndResp(toRun func(ac *appServerCnc) error) error {
-//	err := toRun(ac)
-//	eErr := ac.sendRsp(err)
-//	if err == nil {
-//		err = eErr
-//	}
-//	return err
-//}
-
-func (ac *appServerCnc) runAndResp(f func(asc *appServerCnc) error) error {
-	return nil
 }
 
 func (ac *appServerCnc) controlWorkload(cmd string, rid uint64, areq any, workload func(ac *appServerCnc, rid uint64, areq any) (any, []byte)) {
@@ -305,32 +273,41 @@ func funcAddOStream(ac *appServerCnc, _ uint64, areq any) (arsp any, _ []byte) {
 	return rsp, nil
 }
 
-func (ac *appServerCnc) RunSyncFunction(fName string) error {
-	_, _, wf, _, err := ac.cat.GetFunction(fName)
+func funcOper(ac *appServerCnc, _ uint64, areq any) (arsp any, _ []byte) {
+	req, _ := areq.(*FuncOperReqMsg)
+	rsp := &RespMsg{}
+	arsp = rsp
+	fc, fd, _ := ac.cnc.GetFunction(req.FuncId)
+	if fc == nil || fd == nil {
+		rsp.Error = fmt.Sprintf("Function %s does not exist", req.FuncId)
+		return
+	}
+	if len(fc.GetInStreams()) != len(fd.IStreams) {
+		rsp.Error = fmt.Sprintf("instreams should be %d, got %d", len(fd.IStreams), len(fc.GetInStreams()))
+		return
+	}
+	if len(fc.GetOutStreams()) != len(fd.OStreams) {
+		rsp.Error = fmt.Sprintf("outstreams should be %d, got %d", len(fd.IStreams), len(fc.GetInStreams()))
+		return
+	}
+	var err error
+	switch req.Oper {
+	case "run":
+		err = fc.Run()
+	case "start":
+		err = fc.Start()
+	case "wait":
+		err = fc.Wait()
+	case "terminate":
+		fc.Terminate()
+	default:
+		err = fmt.Errorf("Oper %s not supported", req.Oper)
+	}
 	if err != nil {
-		return err
+		rsp.Error = err.Error()
+		return
 	}
-	if wf == nil {
-		return fmt.Errorf("function %s has no wrapped function, currently not supported", fName)
-	}
-	var rr io.Reader
-	var wr io.Writer
-	return ac.runAndResp(func(asc *appServerCnc) error {
-		fw, err := stf.NewSyncFuncWrapper(
-			ac.cnc.GetCtx(),
-			*wf,
-			rr, wr,
-			//ac.cnc.GetSyncStream(),
-			//ac.cnc.GetSyncStream(),
-		)
-		if err != nil {
-			return err
-		}
-		if err = fw.Run(); err != nil {
-			return err
-		}
-		return nil
-	})
+	return rsp, nil
 }
 
 func (ac *appServerCnc) GetLogger() *slog.Logger {
@@ -345,7 +322,7 @@ type FcServer interface {
 
 type AppServer interface {
 	Catalog() *FunctionCatalog
-	NewCnc(ctx context.Context, qc quic.Connection)
+	NewCnc(qc quic.Connection)
 }
 
 type appServer struct {
@@ -361,7 +338,7 @@ func (as *appServer) Catalog() *FunctionCatalog {
 	return as.cat
 }
 
-func (as *appServer) NewCnc(ctx context.Context, qc quic.Connection) {
+func (as *appServer) NewCnc(qc quic.Connection) {
 	var err error
 	id := qc.RemoteAddr().String()
 	cnc := NewConnection(as.ctx, qc, id, true, true, as.logger)
@@ -370,13 +347,8 @@ func (as *appServer) NewCnc(ctx context.Context, qc quic.Connection) {
 		qc.CloseWithError(0, err.Error())
 		return
 	}
-	//if err := cnc.SetSyncStream(); err != nil {
-	//	cnc.GetLogger().Error("AppServerConnectionHandler", "err", err)
-	//	qc.CloseWithError(0, err.Error())
-	//	return
-	//}
 	ac := &appServerCnc{
-		ctx: ctx,
+		ctx: cnc.GetCtx(),
 		cnc: cnc,
 		cat: as.cat,
 	}
@@ -418,6 +390,6 @@ func RunAppServer(
 			logger.Info("RunAppServer: accept error", "err", lErr)
 			continue
 		}
-		go as.NewCnc(ctx, qc)
+		go as.NewCnc(qc)
 	}
 }

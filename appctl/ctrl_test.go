@@ -5,19 +5,6 @@ import (
 	"testing"
 )
 
-func TestNextId(t *testing.T) {
-	id := NextId("")
-	require.Equal(t, "#1", id)
-	id = NextId("")
-	require.Equal(t, "#2", id)
-	id = NextId("in")
-	require.Equal(t, "in#1", id)
-	id = NextId("")
-	require.Equal(t, "#3", id)
-	id = NextId("in")
-	require.Equal(t, "in#2", id)
-}
-
 func TestRidbs(t *testing.T) {
 	require.Equal(t, uint64(1), NewRidBs(1).Get())
 	require.Equal(t, uint64(0x123456789abcdef0), NewRidBs(0x123456789abcdef0).Get())

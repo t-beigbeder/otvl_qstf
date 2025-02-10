@@ -119,20 +119,49 @@ func (fc *fcClient) AddOStream(os OStream) error {
 	return nil
 }
 
+func (fc *fcClient) funcOper(oper string) error {
+	req := FuncOperReqMsg{Oper: oper, FuncId: fc.id}
+	rsp := RespMsg{}
+	ac := fc.ac
+	rqDc := ac.launchBg(
+		func(rid uint64, req, rqPl, rsp, rspPl any) error {
+			err := ac.sendCtrl(rid, CmdFuncOper, req)
+			if err != nil {
+				return err
+			}
+			return nil
+		},
+		&req, nil, &rsp, nil,
+	)
+	rspData := <-rqDc
+	if rspData.Err != nil {
+		return rspData.Err
+	}
+	arsp, ok := rspData.Rsp.(*RespMsg)
+	if !ok {
+		return fmt.Errorf("unexpected rsp type: %T", rspData.Rsp)
+	}
+	if arsp.Error != "" {
+		return errors.New(arsp.Error)
+	}
+	return nil
+
+}
+
 func (fc *fcClient) Run() error {
-	panic("implement me")
+	return fc.funcOper("run")
 }
 
 func (fc *fcClient) Start() error {
-	panic("implement me")
+	return fc.funcOper("start")
 }
 
 func (fc *fcClient) Wait() error {
-	panic("implement me")
+	return fc.funcOper("wait")
 }
 
 func (fc *fcClient) Terminate() error {
-	panic("implement me")
+	return fc.funcOper("terminate")
 }
 
 type AppClient interface {
@@ -377,57 +406,8 @@ func (ac *appClient) GetOStream(id string) (IStream, error) {
 	return is, nil
 }
 
-func (ac *appClient) oldRT(string, func(client *appClient) error) error {
-	return nil
-}
-
-func (ac *appClient) oldGetOStream(id string) (IStream, error) {
-	if id == "" {
-		id = NextId("in")
-	}
-	var is IStream
-	err := ac.oldRT(CmdAddIStream, func(client *appClient) error {
-		var iErr error
-		is, iErr = client.cnc.AddIStream(id)
-		return iErr
-	})
-	return is, err
-}
-
 func (ac *appClient) RunSyncFunction(fName string, in any, out any) error {
-	funcId := NextId(fmt.Sprintf("/%s/fc", fName))
-	_ = funcId
-	err := ac.oldRT(
-		CmdRunSyncFunction,
-		func(client *appClient) error {
-			bs, err := json.Marshal(in)
-			if err != nil {
-				return err
-			}
-			wbs := make([]byte, len(bs)+4)
-			binary.BigEndian.PutUint32(wbs, uint32(len(bs)))
-			copy(wbs[4:], bs)
-			//stream := ac.cnc.GetSyncStream()
-			//if _, err = stream.Write(wbs); err != nil {
-			//	return err
-			//}
-			var stream io.Reader
-			bs = make([]byte, 4)
-			if _, err = io.ReadFull(stream, bs); err != nil {
-				return err
-			}
-			bln := binary.BigEndian.Uint32(bs)
-			if bln > MaxRspSize { // FIXME: depend on fName
-				return fmt.Errorf("response too large (%d > %d)", bln, MaxRspSize)
-			}
-			bs = make([]byte, bln)
-			_, err = io.ReadFull(stream, bs)
-			if err := json.Unmarshal(bs, out); err != nil {
-				return err
-			}
-			return nil
-		})
-	return err
+	return errors.New("not yet implemented")
 }
 
 func (ac *appClient) NewFunction(fName string, id string) (FcClient, error) {

@@ -255,7 +255,7 @@ func TestNewAppClientRunTermFunc(t *testing.T) {
 	port, cancel, err := RunTestServer(func(as AppServer) {
 		err := as.Catalog().DeclareFunction(
 			FunctionDesc{
-				Name:       "TestNewAppClientRunFunc",
+				Name:       "TestNewAppClientRunTermFunc",
 				Terminable: true,
 				IStreams: []IStreamDesc{
 					{
@@ -294,7 +294,7 @@ func TestNewAppClientRunTermFunc(t *testing.T) {
 	is, err := ac.GetOStream("")
 	require.NoError(t, err)
 	_, _ = is, os
-	fc, err := ac.NewFunction("TestNewAppClientRunFunc", "")
+	fc, err := ac.NewFunction("TestNewAppClientRunTermFunc", "")
 	require.NoError(t, err)
 	err = fc.AddOStream(os)
 	require.NoError(t, err)
@@ -314,13 +314,6 @@ func TestNewAppClientRunTermFunc(t *testing.T) {
 		}
 		time.Sleep(100 * time.Millisecond)
 
-		//bs, err := fromBytes(is)
-		//if err != nil {
-		//	fmt.Fprintf(os2.Stderr, "fromJsonBytes: %s\n", err)
-		//	return
-		//}
-		//fmt.Fprintf(os2.Stderr, "fromJsonBytes: %s\n", string(bs))
-
 		res := ""
 		err = fromJsonBytes(is, &res)
 		if err != nil {
@@ -338,12 +331,84 @@ func TestNewAppClientRunTermFunc(t *testing.T) {
 	err = fc.Terminate()
 	require.NoError(t, err)
 
-	fc, err = ac.NewFunction("TestNewAppClientRunFunc", "")
+	cancel()
+	time.Sleep(20 * time.Millisecond)
+}
+
+func TestNewAppClientSWTermFunc(t *testing.T) {
+	port, cancel, err := RunTestServer(func(as AppServer) {
+		err := as.Catalog().DeclareFunction(
+			FunctionDesc{
+				Name:       "TestNewAppClientSWTermFunc",
+				Terminable: true,
+				IStreams: []IStreamDesc{
+					{
+						StreamDesc: StreamDesc{
+							Name:     "in",
+							Discrete: true,
+							MaxNb:    1,
+						},
+					},
+				},
+				OStreams: []OStreamDesc{
+					{
+						StreamDesc: StreamDesc{
+							Name:     "out",
+							Discrete: true,
+							MaxNb:    1,
+						},
+					},
+				},
+			},
+			nil,
+			&testSw{},
+			getTestSwSthsJson(),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+	})
+	require.NoError(t, err)
+	ac, err := NewAppClient(context.Background(), "localhost:"+port, GetLoggerFor("client"))
+	require.NoError(t, err)
+	require.NotNil(t, ac)
+	time.Sleep(10 * time.Millisecond)
+	os, err := ac.AddIStream("")
+	require.NoError(t, err)
+	is, err := ac.GetOStream("")
+	require.NoError(t, err)
+	_, _ = is, os
+	fc, err := ac.NewFunction("TestNewAppClientSWTermFunc", "")
 	require.NoError(t, err)
 	err = fc.AddOStream(os)
 	require.NoError(t, err)
 	err = fc.AddIStream(is)
 	require.NoError(t, err)
+
+	go func() {
+		js, err := toJsonBytes("hello world")
+		if err != nil {
+			fmt.Fprintf(os2.Stderr, "toJsonBytes: %s\n", err)
+			return
+		}
+		_, err = os.Write(js)
+		if err != nil {
+			fmt.Fprintf(os2.Stderr, "os.Write: %s\n", err)
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+
+		res := ""
+		err = fromJsonBytes(is, &res)
+		if err != nil {
+			fmt.Fprintf(os2.Stderr, "fromJsonBytes: %s\n", err)
+			return
+		}
+		fmt.Fprintf(os2.Stderr, "fromJsonBytes: %s\n", res)
+
+		fc.Terminate()
+	}()
+
 	err = fc.Start()
 	require.NoError(t, err)
 	err = fc.Wait()

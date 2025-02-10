@@ -139,6 +139,7 @@ func GetReqDesc(cmd string) *ReqDesc {
 		CmdNewFunction:    {func() any { return &NewFunctionReqMsg{} }, func() any { return &NewFunctionRespMsg{} }},
 		CmdFuncAddIStream: {func() any { return &FuncAddStreamReqMsg{} }, func() any { return &RespMsg{} }},
 		CmdFuncAddOStream: {func() any { return &FuncAddStreamReqMsg{} }, func() any { return &RespMsg{} }},
+		CmdFuncOper:       {func() any { return &FuncOperReqMsg{} }, func() any { return &RespMsg{} }},
 	}
 	rd, ok := reqDescs[cmd]
 	if !ok {

@@ -186,6 +186,7 @@ func (c *connection) GetOStream(id string) OStream {
 	return os
 }
 
+// TODO: move function related stuff to server-only connection
 func (c *connection) NewFunction(id string, fc stf.Function, fd *FunctionDesc, sths *StreamHandlers) error {
 	c.mmux.Lock()
 	defer c.mmux.Unlock()
