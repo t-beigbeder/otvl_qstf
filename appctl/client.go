@@ -72,6 +72,7 @@ type AppClient interface {
 
 type appClient struct {
 	ctx        context.Context
+	cancel     context.CancelFunc
 	ctlMux     sync.Mutex
 	curReqId   uint64
 	reqChans   map[RidBs]chan RspData
@@ -95,45 +96,57 @@ func (ac *appClient) recvCtrl() {
 	stream := ac.cnc.GetCtrlStream()
 	bs := make([]byte, 16)
 	if _, err = io.ReadFull(stream, bs); err != nil {
-		ac.logger.Error("Read ctrl stream header error: %v", "err", err)
+		ac.logger.Error("Read ctrl stream header error", "err", err)
+		ac.cancel()
 		return
 	}
 	ridBs := RidBs(bs[:])
 	rid = ridBs.Get()
+
+	defer func() {
+		ac.ctlMux.Lock()
+		defer ac.ctlMux.Unlock()
+		rc, ok := ac.rspChans[ridBs]
+		if !ok {
+			ac.logger.Info("rsp channel for rid not found", "rid", rid)
+			return
+		}
+		rc <- RspData{Rid: rid, Rsp: ac.rspRspVals[ridBs], Payload: payload}
+
+	}()
+
 	lnRs = LenBs(bs[8:]).Get()
 	if lnRs > MaxRspSize {
-		ac.logger.Error("Read rsp too large (%d)", "lnRs", lnRs)
+		ac.logger.Error("Read rsp too large", "lnRs", lnRs)
 		return
 	}
 	lnPl = LenBs(bs[12:]).Get()
 	if lnPl > MaxRspSize {
-		ac.logger.Error("Read rsp payload too large (%d)", "lnPl", lnPl)
+		ac.logger.Error("Read rsp payload too large", "lnPl", lnPl)
 		return
 	}
 	bs = make([]byte, lnRs)
 	if _, err = io.ReadFull(stream, bs); err != nil {
-		ac.logger.Error("Read ctrl stream rsp error: %v", "err", err)
+		ac.logger.Error("Read ctrl stream rsp error", "err", err)
 		return
 	}
 	if lnPl != 0 {
 		payload = make([]byte, lnPl)
 		if _, err = io.ReadFull(stream, payload); err != nil {
-			ac.logger.Error("Read ctrl stream rsp payload error: %v", "err", err)
+			ac.logger.Error("Read ctrl stream rsp payload error", "err", err)
 			return
 		}
 	}
-	ac.ctlMux.Lock()
-	defer ac.ctlMux.Unlock()
-	rc, ok := ac.rspChans[ridBs]
+
+	val, ok := ac.rspRspVals[ridBs]
 	if !ok {
-		ac.logger.Info("rsp channel for rid %d not found", "rid", rid)
+		ac.logger.Info("rsp values for rid not found", "rid", rid)
 		return
 	}
-	if err = json.Unmarshal(bs, ac.rspRspVals[ridBs]); err != nil {
-		ac.logger.Error("Read rsp json error: %v", "err", err)
+	if err = json.Unmarshal(bs, val); err != nil {
+		ac.logger.Error("Read rsp json error", "err", err)
 		return
 	}
-	rc <- RspData{Rid: rid, Rsp: ac.rspRspVals[ridBs], Payload: payload}
 }
 
 func (ac *appClient) lstnCtrl() {
@@ -145,7 +158,9 @@ func (ac *appClient) lstnCtrl() {
 			ac.logger.Info("shutting down ctrl listener")
 			return
 		default:
+			ac.logger.Debug("ctrl listener reading...")
 			ac.recvCtrl()
+			ac.logger.Info("ctrl listener reading done")
 		}
 	}
 }
@@ -256,24 +271,46 @@ func (ac *appClient) AddIStream(id string) (OStream, error) {
 	return os, nil
 }
 
+func (ac *appClient) GetOStream(id string) (IStream, error) {
+	if id == "" {
+		id = NextId("in")
+	}
+	req := AddStreamReqMsg{StreamId: id}
+	rsp := RespMsg{}
+	var is IStream
+	rqDc := ac.launchBg(
+		func(rid uint64, req, _, rsp, _ any) error {
+			err := ac.sendCtrl(rid, CmdAddIStream, req)
+			if err != nil {
+				return err
+			}
+			is, err = ac.cnc.AddIStream(id)
+			if err != nil {
+				return err
+			}
+			return nil
+		},
+		&req, nil, &rsp, nil,
+	)
+	rspData := <-rqDc
+	if rspData.Err != nil {
+		return nil, rspData.Err
+	}
+	arsp, ok := rspData.Rsp.(*RespMsg)
+	if !ok {
+		return nil, fmt.Errorf("unexpected rsp type: %T", rspData.Rsp)
+	}
+	if arsp.Error != "" {
+		return nil, errors.New(arsp.Error)
+	}
+	return is, nil
+}
+
 func (ac *appClient) oldRT(string, func(client *appClient) error) error {
 	return nil
 }
 
-func (ac *appClient) oldAddIStream(id string) (OStream, error) {
-	if id == "" {
-		id = NextId("out")
-	}
-	var os OStream
-	err := ac.oldRT(CmdAddOStream, func(client *appClient) error {
-		var iErr error
-		os, iErr = client.cnc.AddOStream(id)
-		return iErr
-	})
-	return os, err
-}
-
-func (ac *appClient) GetOStream(id string) (IStream, error) {
+func (ac *appClient) oldGetOStream(id string) (IStream, error) {
 	if id == "" {
 		id = NextId("in")
 	}
@@ -326,23 +363,32 @@ func (ac *appClient) NewFunction(fName string, id string) (FcClient, error) {
 	if id == "" {
 		id = NextId(fmt.Sprintf("/%s/fc", fName))
 	}
-	//ac.dMux.Lock()
-	//defer ac.dMux.Unlock()
-	//_, ok := ac.funcs[id]
-	//if ok {
-	//	return nil, fmt.Errorf("function %s id %s already exists", fName, id)
-	//}
-	//var rsp NewFunctionRespMsg
-	//err := ac.RunSyncFunction(FNameNewFunction, &NewFunctionReqMsg{fName, id}, &rsp)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//if rsp.Error != "" {
-	//	return nil, errors.New(rsp.Error)
-	//}
-	//fc := &fcClient{ac, &(rsp.Desc), id}
-	//ac.funcs[id] = fc
-	return nil, nil
+	req := NewFunctionReqMsg{FdName: fName, FuncId: id}
+	rsp := NewFunctionRespMsg{}
+	rqDc := ac.launchBg(
+		func(rid uint64, req, rqPl, rsp, rspPl any) error {
+			err := ac.sendCtrl(rid, CmdNewFunction, req)
+			if err != nil {
+				return err
+			}
+			return nil
+		},
+		&req, nil, &rsp, nil,
+	)
+	rspData := <-rqDc
+	if rspData.Err != nil {
+		return nil, rspData.Err
+	}
+	arsp, ok := rspData.Rsp.(*NewFunctionRespMsg)
+	if !ok {
+		return nil, fmt.Errorf("unexpected rsp type: %T", rspData.Rsp)
+	}
+	if arsp.Error != "" {
+		return nil, errors.New(arsp.Error)
+	}
+	fc := &fcClient{ac, &(rsp.Desc), id}
+	ac.funcs[id] = fc
+	return fc, nil
 }
 
 func (ac *appClient) GetFunction(id string) FcClient {
@@ -350,7 +396,15 @@ func (ac *appClient) GetFunction(id string) FcClient {
 	return fc
 }
 
-func NewAppClient(ctx context.Context, sAddr string, logger *slog.Logger) (AppClient, error) {
+func (ac *appClient) close(err error) error {
+	ac.logger.Info("close app client requested", "cn", ac.cnc, "err", err)
+	for _, rqc := range ac.reqChans {
+		close(rqc)
+	}
+	return err
+}
+
+func NewAppClient(pCtx context.Context, sAddr string, logger *slog.Logger) (AppClient, error) {
 	var (
 		qc  quic.Connection
 		err error
@@ -364,12 +418,14 @@ func NewAppClient(ctx context.Context, sAddr string, logger *slog.Logger) (AppCl
 			qc.CloseWithError(0, "")
 		}
 	}()
+	ctx, cancel := context.WithCancel(pCtx)
 	cnc := NewConnection(ctx, qc, "client", false, false, logger)
 	if err := cnc.SetCtrlStream(); err != nil {
 		return nil, err
 	}
 	ac := &appClient{
 		ctx:        ctx,
+		cancel:     cancel,
 		reqChans:   make(map[RidBs]chan RspData),
 		rspChans:   make(map[RidBs]chan RspData),
 		rspRspVals: make(map[RidBs]any),
@@ -378,5 +434,14 @@ func NewAppClient(ctx context.Context, sAddr string, logger *slog.Logger) (AppCl
 		logger:     logger,
 	}
 	go ac.lstnCtrl()
+	go func() {
+		for {
+			select {
+			case <-ac.ctx.Done():
+				ac.close(errors.New("app client closed"))
+				return
+			}
+		}
+	}()
 	return ac, nil
 }

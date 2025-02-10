@@ -100,9 +100,13 @@ type RunSyncFunctionRespMsg struct {
 }
 
 type NewFunctionReqMsg struct {
-	FdName     string `json:"fdName"`
-	FuncId     string `json:"funcId"`
-	Terminable bool   `json:"terminable"`
+	FdName string `json:"fdName"`
+	FuncId string `json:"funcId"`
+}
+
+type NewFunctionRespMsg struct {
+	Error string       `json:"error"`
+	Desc  FunctionDesc `json:"desc"`
 }
 
 type FuncAddStreamReqMsg struct {
@@ -130,9 +134,13 @@ type ReqDesc struct {
 
 func GetReqDesc(cmd string) *ReqDesc {
 	reqDescs := map[string]ReqDesc{
-		CmdAddIStream: {func() any { return &AddStreamReqMsg{} }, func() any { return &RespMsg{} }},
-		CmdAddOStream: {func() any { return &AddStreamReqMsg{} }, func() any { return &RespMsg{} }},
+		CmdAddIStream:  {func() any { return &AddStreamReqMsg{} }, func() any { return &RespMsg{} }},
+		CmdAddOStream:  {func() any { return &AddStreamReqMsg{} }, func() any { return &RespMsg{} }},
+		CmdNewFunction: {func() any { return &NewFunctionReqMsg{} }, func() any { return &NewFunctionRespMsg{} }},
 	}
-	rd, _ := reqDescs[cmd]
+	rd, ok := reqDescs[cmd]
+	if !ok {
+		return nil
+	}
 	return &rd
 }

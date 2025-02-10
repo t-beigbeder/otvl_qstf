@@ -19,6 +19,7 @@ type Connection interface {
 	GetCtx() context.Context
 	GetId() string
 	GetQuicConnection() quic.Connection
+	String() string
 	GetLogger() *slog.Logger
 	SetCtrlStream() error
 	GetCtrlStream() IOStream
@@ -71,6 +72,10 @@ func (c *connection) GetCtx() context.Context {
 
 func (c *connection) GetId() string {
 	return c.id
+}
+
+func (c *connection) String() string {
+	return fmt.Sprintf("%s->%s", c.qc.LocalAddr(), c.qc.RemoteAddr())
 }
 
 func (c *connection) GetQuicConnection() quic.Connection {

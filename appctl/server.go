@@ -15,8 +15,6 @@ import (
 type AppServerCnc interface {
 	Handle() error
 	Close(error) error
-	AddIStream(id string) error
-	//GetOStream(id string) error
 	RunSyncFunction(funcId string) error
 	GetLogger() *slog.Logger
 }
@@ -70,13 +68,17 @@ func (ac *appServerCnc) Handle() error {
 		return err
 	}
 	_, _, _, _ = rid, cmd, areq, payload
-	ac.GetLogger().Info("Received request", "cmd", cmd, "req", areq)
+	ac.GetLogger().Info("Received request", "cmd", cmd, "req", areq, "rid", rid)
 	switch cmd {
 	case CmdAddOStream:
-		go ac.goSub(cmd, rid, ac.getOStream(rid, areq))
+		ac.controlWorkload(cmd, rid, areq, getOStream)
+	case CmdAddIStream:
+		ac.controlWorkload(cmd, rid, areq, addIStream)
+	case CmdNewFunction:
+		ac.controlWorkload(cmd, rid, areq, newFunction)
 	default:
 		ac.GetLogger().Error("Unknown command", "cmd", cmd)
-		return fmt.Errorf("unknown command: %s", cmd)
+		return ac.respError(rid, fmt.Errorf("unknown command: %s", cmd))
 	}
 	return nil
 }
@@ -122,18 +124,14 @@ func (ac *appServerCnc) runAndResp(f func(asc *appServerCnc) error) error {
 	return nil
 }
 
-func (ac *appServerCnc) AddIStream(id string) error {
-	return ac.runAndResp(func(asc *appServerCnc) error {
-		_, err := asc.cnc.AddIStream(id)
-		return err
-	})
-}
-
-func (ac *appServerCnc) goSub(cmd string, rid uint64, err error) {
-	ac.GetLogger().Debug("Command done", "cmd", cmd, "rid", rid, "err", err)
-	if err != nil {
-		ac.GetLogger().Error("Error running command", "cmd", cmd, "rid", rid, "err", err)
-	}
+func (ac *appServerCnc) controlWorkload(cmd string, rid uint64, areq any, workload func(ac *appServerCnc, rid uint64, areq any) (any, []byte)) {
+	go func() {
+		arsp, payload := workload(ac, rid, areq)
+		err := ac.sendCtrl(rid, arsp, payload)
+		if err != nil {
+			ac.GetLogger().Error("Failed to send control response for workload", "cmd", cmd, "rid", rid, "err", err)
+		}
+	}()
 }
 
 func (ac *appServerCnc) sendCtrl(rid uint64, rsp any, payload []byte) error {
@@ -164,18 +162,37 @@ func (ac *appServerCnc) sendCtrl(rid uint64, rsp any, payload []byte) error {
 	return nil
 }
 
-func (ac *appServerCnc) getOStream(rid uint64, areq any) error {
+func (ac *appServerCnc) respError(rid uint64, err error) error {
+	rsp := &RespMsg{Error: err.Error()}
+	err = ac.sendCtrl(rid, rsp, nil)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func getOStream(ac *appServerCnc, rid uint64, areq any) (any, []byte) {
 	req, _ := areq.(*AddStreamReqMsg)
 	_, err := ac.cnc.AddOStream(req.StreamId)
 	rsp := &RespMsg{}
 	if err != nil {
 		rsp.Error = err.Error()
 	}
-	err = ac.sendCtrl(rid, rsp, nil)
+	return rsp, nil
+}
+
+func addIStream(ac *appServerCnc, rid uint64, areq any) (any, []byte) {
+	req, _ := areq.(*AddStreamReqMsg)
+	_, err := ac.cnc.AddIStream(req.StreamId)
+	rsp := &RespMsg{}
 	if err != nil {
-		return err
+		rsp.Error = err.Error()
 	}
-	return nil
+	return rsp, nil
+}
+
+func newFunction(ac *appServerCnc, rid uint64, areq any) (any, []byte) {
+	return nil, nil
 }
 
 func (ac *appServerCnc) RunSyncFunction(fName string) error {
