@@ -81,7 +81,7 @@ func TestNewAppClientRunSync(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 	for i := 0; i < 5; i++ {
 		var sOut string
-		err = ac.RunSyncFunction("TestNewAppClientRunSync", "", fmt.Sprintf("#%03d", i), &sOut)
+		err = ac.RunSyncFunction("TestNewAppClientRunSync", "", MarshalJson, fmt.Sprintf("#%03d", i), &sOut)
 		require.NoError(t, err)
 	}
 	cancel()

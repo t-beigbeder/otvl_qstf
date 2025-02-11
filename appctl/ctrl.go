@@ -2,8 +2,10 @@ package appctl
 
 import (
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"github.com/t-beigbeder/otvl_qstf/internal/bfio"
+	"gopkg.in/yaml.v3"
 	"sync"
 )
 
@@ -155,4 +157,46 @@ func GetReqDesc(cmd string) *ReqDesc {
 		return nil
 	}
 	return &rd
+}
+
+func MarshallToWrapped(mt Marshaller, rqPl any) ([]byte, error) {
+	var ms func(any) ([]byte, error)
+	switch mt {
+	case MarshalNone:
+		bs, ok := rqPl.([]byte)
+		if !ok {
+			return nil, fmt.Errorf("MarshallToWrapped: expected []byte, got %T", rqPl)
+		}
+		return bs, nil
+	case MarshalJson:
+		ms = json.Marshal
+	case MarshalYaml:
+		ms = yaml.Marshal
+	default:
+		return nil, fmt.Errorf("MarshallToWrapped: unsupported marshaller: %v", mt)
+	}
+	return ms(rqPl)
+}
+
+func UnmarshallFromWrapped(mt Marshaller, rsPl any, v any) (any, error) {
+	var ums func(data []byte, v any) error
+	switch mt {
+	case MarshalNone:
+		return v, nil
+	case MarshalJson:
+		ums = json.Unmarshal
+	case MarshalYaml:
+		ums = yaml.Unmarshal
+	default:
+		return nil, fmt.Errorf("UnmarshallFromWrapped: unsupported marshaller: %v", mt)
+	}
+	plbs, ok := rsPl.([]byte)
+	if !ok {
+		return nil, fmt.Errorf("unexpected output payload type: %T", rsPl)
+	}
+	err := ums(plbs, v)
+	if err != nil {
+		return nil, err
+	}
+	return nil, nil
 }

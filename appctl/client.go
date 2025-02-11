@@ -168,7 +168,7 @@ type AppClient interface {
 	AddIStream(id string) (OStream, error)
 	GetOStream(id string) (IStream, error)
 	GetFDesc(fName string) (*FunctionDesc, error)
-	RunSyncFunction(fName string, id string, in any, out any) error
+	RunSyncFunction(fName string, id string, im Marshaller, in any, out any) error
 	NewFunction(fName string, id string) (FcClient, error)
 	GetFunction(id string) FcClient
 }
@@ -438,7 +438,7 @@ func (ac *appClient) GetFDesc(fName string) (*FunctionDesc, error) {
 	return &arsp.Desc, nil
 }
 
-func (ac *appClient) RunSyncFunction(fName string, id string, in any, out any) error {
+func (ac *appClient) RunSyncFunction(fName string, id string, im Marshaller, in any, out any) error {
 	if id == "" {
 		id = NextId(fmt.Sprintf("/%s/fc", fName))
 	}
@@ -446,7 +446,7 @@ func (ac *appClient) RunSyncFunction(fName string, id string, in any, out any) e
 	rsp := RunSyncFunctionRespMsg{}
 	rqDc := ac.launchBg(
 		func(rid uint64, req, rqPl, rsp, rspPl any) error {
-			rqPlBs, err := json.Marshal(rqPl)
+			rqPlBs, err := MarshallToWrapped(im, rqPl)
 			if err != nil {
 				return err
 			}
@@ -469,18 +469,12 @@ func (ac *appClient) RunSyncFunction(fName string, id string, in any, out any) e
 	if arsp.Error != "" {
 		return errors.New(arsp.Error)
 	}
-
-	if arsp.Desc.Wrapper.OutMarshaller == MarshalJson {
-		plbs, ok := rspData.Payload.([]byte)
-		if !ok {
-			return fmt.Errorf("unexpected payload type: %T", rspData.Payload)
-		}
-		err := json.Unmarshal(plbs, out)
-		if err != nil {
-			return err
-		}
-	} else {
-		return fmt.Errorf("payload output unmarshaller %d not yet supported", arsp.Desc.Wrapper.OutMarshaller)
+	out2, err := UnmarshallFromWrapped(arsp.Desc.Wrapper.OutMarshaller, rspData.Payload, out)
+	if err != nil {
+		return err
+	}
+	if out2 != nil {
+		out = out2
 	}
 	return nil
 }
