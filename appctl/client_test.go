@@ -58,12 +58,19 @@ func TestGetFDesc(t *testing.T) {
 func TestNewAppClientRunSync(t *testing.T) {
 	port, cancel, err := RunTestServer(func(as AppServer) {
 		as.Catalog().DeclareFunction(
-			FunctionDesc{Name: "TestNewAppClientRunSync"},
+			FunctionDesc{
+				Name: "TestNewAppClientRunSync",
+				Wrapper: WrapperDesc{
+					InMarshaller:  MarshalJson,
+					OutMarshaller: MarshalJson,
+				},
+			},
 			&stf.WrappedFunction{
 				json.Marshal, json.Unmarshal,
 				templateForString, templateForString,
 				func(ctx context.Context, a any) any {
-					return fmt.Sprintf("TestNewAppClientRunSync: %v", a)
+					sa, _ := a.(*string)
+					return fmt.Sprintf("TestNewAppClientRunSync: %v", *sa)
 				},
 			}, nil, nil)
 	})

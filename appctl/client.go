@@ -443,7 +443,7 @@ func (ac *appClient) RunSyncFunction(fName string, id string, in any, out any) e
 		id = NextId(fmt.Sprintf("/%s/fc", fName))
 	}
 	req := RunSyncFunctionReqMsg{FdName: fName, FuncId: id}
-	rsp := RespMsg{}
+	rsp := RunSyncFunctionRespMsg{}
 	rqDc := ac.launchBg(
 		func(rid uint64, req, rqPl, rsp, rspPl any) error {
 			rqPlBs, err := json.Marshal(rqPl)
@@ -462,12 +462,25 @@ func (ac *appClient) RunSyncFunction(fName string, id string, in any, out any) e
 	if rspData.Err != nil {
 		return rspData.Err
 	}
-	arsp, ok := rspData.Rsp.(*RespMsg)
+	arsp, ok := rspData.Rsp.(*RunSyncFunctionRespMsg)
 	if !ok {
 		return fmt.Errorf("unexpected rsp type: %T", rspData.Rsp)
 	}
 	if arsp.Error != "" {
 		return errors.New(arsp.Error)
+	}
+
+	if arsp.Desc.Wrapper.OutMarshaller == MarshalJson {
+		plbs, ok := rspData.Payload.([]byte)
+		if !ok {
+			return fmt.Errorf("unexpected payload type: %T", rspData.Payload)
+		}
+		err := json.Unmarshal(plbs, out)
+		if err != nil {
+			return err
+		}
+	} else {
+		return fmt.Errorf("payload output unmarshaller %d not yet supported", arsp.Desc.Wrapper.OutMarshaller)
 	}
 	return nil
 }

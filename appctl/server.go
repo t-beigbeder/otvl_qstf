@@ -188,7 +188,7 @@ func getFDesc(ac *appServerCnc, _ uint64, areq any, _ []byte) (any, []byte) {
 
 func runSyncFunction(ac *appServerCnc, _ uint64, areq any, rqPl []byte) (arsp any, rsPl []byte) {
 	req, _ := areq.(*RunSyncFunctionReqMsg)
-	rsp := &RespMsg{}
+	rsp := &RunSyncFunctionRespMsg{}
 	arsp = rsp
 	fd, _, wf, _, err := ac.cat.GetFunction(req.FdName)
 	if err != nil {
@@ -201,7 +201,11 @@ func runSyncFunction(ac *appServerCnc, _ uint64, areq any, rqPl []byte) (arsp an
 	}
 	values := make(map[string]any)
 	fcCtx := context.WithValue(ac.ctx, "values", values)
-	in := bytes.NewReader(rqPl)
+	inBs := make([]byte, len(rqPl)+4)
+	lnBs := NewLenBs(uint32(len(rqPl)))
+	copy(inBs[0:], lnBs[:])
+	copy(inBs[4:], rqPl)
+	in := bytes.NewReader(inBs)
 	out := bfio.NewBufWr()
 	fc, err := stf.NewSyncFuncWrapper(
 		fcCtx,
@@ -224,11 +228,14 @@ func runSyncFunction(ac *appServerCnc, _ uint64, areq any, rqPl []byte) (arsp an
 		rsp.Error = err.Error()
 		return
 	}
-	rsPl, err = wf.Marshaller(out.Bytes())
-	if err != nil {
-		rsp.Error = err.Error()
+	outBs := out.Bytes()
+	oln := LenBs(outBs[0:4]).Get()
+	if int(oln)+4 != len(outBs) {
+		rsp.Error = fmt.Sprintf("output payload len mismatch %d != %d", oln+4, len(outBs))
 		return
 	}
+	rsp.Desc = *fd
+	rsPl = outBs[4:]
 	return
 }
 

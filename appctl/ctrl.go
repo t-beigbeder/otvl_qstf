@@ -29,9 +29,9 @@ func (rbs RidBs) String() string {
 
 type LenBs [4]byte
 
-func NewLenBs(rid uint32) LenBs {
+func NewLenBs(ln uint32) LenBs {
 	lbs := LenBs{}
-	binary.BigEndian.PutUint32(lbs[:], rid)
+	binary.BigEndian.PutUint32(lbs[:], ln)
 	return lbs
 }
 
@@ -107,6 +107,8 @@ type RunSyncFunctionReqMsg struct {
 	FuncId string `json:"funcId"`
 }
 
+type RunSyncFunctionRespMsg GetFDescRespMsg
+
 type NewFunctionReqMsg struct {
 	FdName string `json:"fdName"`
 	FuncId string `json:"funcId"`
@@ -142,7 +144,7 @@ func GetReqDesc(cmd string) *ReqDesc {
 		CmdAddIStream:      {func() any { return &AddStreamReqMsg{} }, func() any { return &RespMsg{} }},
 		CmdAddOStream:      {func() any { return &AddStreamReqMsg{} }, func() any { return &RespMsg{} }},
 		CmdGetFDesc:        {func() any { return &GetFDescReqMsg{} }, func() any { return &GetFDescRespMsg{} }},
-		CmdRunSyncFunction: {func() any { return &RunSyncFunctionReqMsg{} }, func() any { return &RespMsg{} }},
+		CmdRunSyncFunction: {func() any { return &RunSyncFunctionReqMsg{} }, func() any { return &RunSyncFunctionRespMsg{} }},
 		CmdNewFunction:     {func() any { return &NewFunctionReqMsg{} }, func() any { return &NewFunctionRespMsg{} }},
 		CmdFuncAddIStream:  {func() any { return &FuncAddStreamReqMsg{} }, func() any { return &RespMsg{} }},
 		CmdFuncAddOStream:  {func() any { return &FuncAddStreamReqMsg{} }, func() any { return &RespMsg{} }},
