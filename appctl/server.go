@@ -21,9 +21,10 @@ type AppServerCnc interface {
 }
 
 type appServerCnc struct {
-	ctx context.Context
-	cnc Connection
-	cat *FunctionCatalog
+	ctx    context.Context
+	cancel context.CancelFunc
+	cnc    Connection
+	cat    *FunctionCatalog
 }
 
 func (ac *appServerCnc) recvCtrl() (rid uint64, cmd string, req any, payload []byte, err error) {
@@ -44,8 +45,8 @@ func (ac *appServerCnc) recvCtrl() (rid uint64, cmd string, req any, payload []b
 		return
 	}
 	lnPl := LenBs(hbs[16:]).Get()
-	if lnPl > MaxReqSize {
-		err = fmt.Errorf("request too large (%d > %d)", lnPl, MaxReqSize)
+	if lnPl > MaxInPlSize {
+		err = fmt.Errorf("request too large (%d > %d)", lnPl, MaxInPlSize)
 		return
 	}
 
@@ -114,6 +115,8 @@ func (ac *appServerCnc) controlWorkload(cmd string, rid uint64, areq any, payloa
 		err := ac.sendCtrl(rid, arsp, payload)
 		if err != nil {
 			ac.GetLogger().Error("Failed to send control response for workload", "cmd", cmd, "rid", rid, "err", err)
+			ac.cancel()
+			ac.cnc.GetQuicConnection().CloseWithError(0, err.Error()) // FIXME: harmonize
 		}
 	}()
 }
@@ -122,6 +125,12 @@ func (ac *appServerCnc) sendCtrl(rid uint64, rsp any, payload []byte) error {
 	js, err := json.Marshal(rsp)
 	if err != nil {
 		return err
+	}
+	if len(js) > MaxRspSize {
+		return fmt.Errorf("response too large (%d > %d)", len(js), MaxRspSize)
+	}
+	if len(payload) > MaxOutPlSize {
+		return fmt.Errorf("response payload too large (%d > %d)", len(payload), MaxOutPlSize)
 	}
 	ln := 16 + len(js)
 	if payload != nil {
@@ -416,16 +425,18 @@ func (as *appServer) Catalog() *FunctionCatalog {
 func (as *appServer) NewCnc(qc quic.Connection) {
 	var err error
 	id := qc.RemoteAddr().String()
-	cnc := NewConnection(as.ctx, qc, id, true, true, as.logger)
+	cCtx, cancel := context.WithCancel(as.ctx)
+	cnc := NewConnection(cCtx, qc, id, true, true, as.logger)
 	if err := cnc.SetCtrlStream(); err != nil {
 		cnc.GetLogger().Error("AppServerConnectionHandler", "err", err)
 		qc.CloseWithError(0, err.Error())
 		return
 	}
 	ac := &appServerCnc{
-		ctx: cnc.GetCtx(),
-		cnc: cnc,
-		cat: as.cat,
+		ctx:    cnc.GetCtx(),
+		cancel: cancel,
+		cnc:    cnc,
+		cat:    as.cat,
 	}
 	as.cncs[id] = ac
 	defer func() {

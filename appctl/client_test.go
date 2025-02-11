@@ -55,7 +55,7 @@ func TestGetFDesc(t *testing.T) {
 	time.Sleep(20 * time.Millisecond)
 }
 
-func TestNewAppClientRunSync(t *testing.T) {
+func TestNewAppClientRunSyncBase(t *testing.T) {
 	port, cancel, err := RunTestServer(func(as AppServer) {
 		as.Catalog().DeclareFunction(
 			FunctionDesc{
@@ -84,6 +84,86 @@ func TestNewAppClientRunSync(t *testing.T) {
 		err = ac.RunSyncFunction("TestNewAppClientRunSync", "", MarshalJson, fmt.Sprintf("#%03d", i), &sOut)
 		require.NoError(t, err)
 	}
+	cancel()
+	time.Sleep(20 * time.Millisecond)
+}
+
+func TestNewAppClientRunSyncReqLarge(t *testing.T) {
+	port, cancel, err := RunTestServer(func(as AppServer) {
+		as.Catalog().DeclareFunction(
+			FunctionDesc{
+				Name: "TestNewAppClientRunSyncReqLarge",
+				Wrapper: WrapperDesc{
+					InMarshaller:  MarshalJson,
+					OutMarshaller: MarshalJson,
+				},
+			},
+			&stf.WrappedFunction{
+				json.Marshal, json.Unmarshal,
+				templateForString, templateForString,
+				func(ctx context.Context, a any) any {
+					sa, _ := a.(*string)
+					return fmt.Sprintf("TestNewAppClientRunSyncReqLarge: %v", *sa)
+				},
+			}, nil, nil)
+	})
+	require.NoError(t, err)
+	ac, err := NewAppClient(context.Background(), "localhost:"+port, GetLoggerFor("client"))
+	require.NoError(t, err)
+	require.NotNil(t, ac)
+	time.Sleep(10 * time.Millisecond)
+	genLargeString := func() string {
+		res := ""
+		for i := 0; len(res) <= MaxInPlSize; i++ {
+			s := fmt.Sprintf("#%03d ", i)
+			res += s
+		}
+		return res
+	}
+	var sOut string
+	err = ac.RunSyncFunction("TestNewAppClientRunSyncReqLarge", "", MarshalJson, genLargeString(), &sOut)
+	require.Error(t, err)
+	cancel()
+	time.Sleep(20 * time.Millisecond)
+}
+
+func TestNewAppClientRunSyncRspLarge(t *testing.T) {
+	port, cancel, err := RunTestServer(func(as AppServer) {
+		as.Catalog().DeclareFunction(
+			FunctionDesc{
+				Name: "TestNewAppClientRunSyncRspLarge",
+				Wrapper: WrapperDesc{
+					InMarshaller:  MarshalJson,
+					OutMarshaller: MarshalJson,
+				},
+			},
+			&stf.WrappedFunction{
+				json.Marshal, json.Unmarshal,
+				templateForString, templateForString,
+				func(ctx context.Context, a any) any {
+					sa, _ := a.(*string)
+					return fmt.Sprintf("TestNewAppClientRunSyncRspLarge: %v", *sa)
+				},
+			}, nil, nil)
+	})
+	require.NoError(t, err)
+	ac, err := NewAppClient(context.Background(), "localhost:"+port, GetLoggerFor("client"))
+	require.NoError(t, err)
+	require.NotNil(t, ac)
+	time.Sleep(10 * time.Millisecond)
+	var sOut string
+	genNotSoLargeString := func() string {
+		res := ""
+		for i := 0; ; i++ {
+			s := fmt.Sprintf("TestNewAppClientRunSyncRspLarge #%03d ", i)
+			if len(res)+len(s) >= MaxInPlSize {
+				return res
+			}
+			res += s
+		}
+	}
+	err = ac.RunSyncFunction("TestNewAppClientRunSyncRspLarge", "", MarshalJson, genNotSoLargeString(), &sOut)
+	require.Error(t, err)
 	cancel()
 	time.Sleep(20 * time.Millisecond)
 }

@@ -87,8 +87,8 @@ const (
 	CmdFuncOper        = "FuncOper"
 	MaxReqSize         = 256
 	MaxRspSize         = 1024
-	MaxInPlSize        = bfio.MaxBufWriterSize
-	MaxOutPlSize       = bfio.MaxBufWriterSize
+	MaxInPlSize        = bfio.MaxBufWriterSize / 2
+	MaxOutPlSize       = bfio.MaxBufWriterSize / 2
 )
 
 type AddStreamReqMsg struct {

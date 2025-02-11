@@ -76,5 +76,7 @@ func TestTerminable(t *testing.T) {
 	}()
 	sw.is = is
 	err = fc.Run()
-	require.NoError(t, err)
+	require.Error(t, err) // FIXME: to be reviewed
+	require.Contains(t, err.Error(), "unexpected terminate message")
+	require.Contains(t, err.Error(), "OstBGet no more data")
 }

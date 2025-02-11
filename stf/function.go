@@ -237,6 +237,20 @@ func (fc *function) Wait() error {
 		return fc.setState(StateFinished, err)
 	}
 	fc.wg.Wait()
+	var err error
+	for _, in := range fc.inList {
+		if in.err != nil {
+			err = errors.Join(err, in.err)
+		}
+	}
+	for _, out := range fc.outList {
+		if out.err != nil {
+			err = errors.Join(err, out.err)
+		}
+	}
+	if err != nil {
+		return fc.setState(StateFinished, err)
+	}
 	return fc.setState(StateFinished, nil)
 }
 

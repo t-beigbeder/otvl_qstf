@@ -221,22 +221,26 @@ func (ac *appClient) recvCtrl() {
 	lnRs = LenBs(bs[8:]).Get()
 	if lnRs > MaxRspSize {
 		ac.logger.Error("Read rsp too large", "lnRs", lnRs)
+		ac.cancel()
 		return
 	}
 	lnPl = LenBs(bs[12:]).Get()
-	if lnPl > MaxRspSize {
+	if lnPl > MaxOutPlSize {
 		ac.logger.Error("Read rsp payload too large", "lnPl", lnPl)
+		ac.cancel()
 		return
 	}
 	bs = make([]byte, lnRs)
 	if _, err = io.ReadFull(stream, bs); err != nil {
 		ac.logger.Error("Read ctrl stream rsp error", "err", err)
+		ac.cancel()
 		return
 	}
 	if lnPl != 0 {
 		payload = make([]byte, lnPl)
 		if _, err = io.ReadFull(stream, payload); err != nil {
 			ac.logger.Error("Read ctrl stream rsp payload error", "err", err)
+			ac.cancel()
 			return
 		}
 	}
@@ -270,6 +274,12 @@ func (ac *appClient) sendCtrl(rid uint64, cmd string, req any, payload []byte) e
 	js, err := json.Marshal(req)
 	if err != nil {
 		return err
+	}
+	if len(js) > MaxReqSize {
+		return fmt.Errorf("request too large: %d > %d", len(js), MaxReqSize)
+	}
+	if len(payload) > MaxInPlSize {
+		return fmt.Errorf("payload too large: %d > %d", len(payload), MaxInPlSize)
 	}
 	bs := make([]byte, 8+4+4+4+len(cmd)+len(js)+len(payload))
 	SetRidBs(rid, bs)

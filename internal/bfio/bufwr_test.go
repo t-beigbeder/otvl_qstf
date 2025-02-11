@@ -18,7 +18,7 @@ func TestNewBufWrBase(t *testing.T) {
 func TestBufWrExceed(t *testing.T) {
 	wr := NewBufWr()
 	var err error
-	for i := 0; i < 500; i++ {
+	for i := 0; i < 600; i++ {
 		in := bytes.NewReader([]byte("TestBufWrExceed"))
 		_, err = io.Copy(wr, in)
 		if err != nil {

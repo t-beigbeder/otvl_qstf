@@ -7,7 +7,7 @@ import (
 	"io"
 )
 
-const MaxBufWriterSize = 4096
+const MaxBufWriterSize = 8192
 
 type BufWriter interface {
 	Bytes() []byte
