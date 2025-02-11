@@ -3,8 +3,11 @@ package bfio
 import (
 	"bufio"
 	"bytes"
+	"fmt"
 	"io"
 )
+
+const MaxBufWriterSize = 4096
 
 type BufWriter interface {
 	Bytes() []byte
@@ -19,6 +22,9 @@ type bufWr struct {
 var _ BufWriter = &bufWr{}
 
 func (b *bufWr) Write(p []byte) (n int, err error) {
+	if len(b.buf.Bytes())+len(p) > MaxBufWriterSize {
+		return 0, fmt.Errorf("buffer %d + %d > %d", len(b.buf.Bytes()), len(p), MaxBufWriterSize)
+	}
 	return b.buf.Write(p)
 }
 

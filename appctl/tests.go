@@ -68,3 +68,8 @@ func fromJsonBytes(rr io.Reader, a any) error {
 	}
 	return json.Unmarshal(bs, a)
 }
+
+func templateForString() any {
+	a := ""
+	return &a
+}

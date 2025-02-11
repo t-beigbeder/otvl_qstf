@@ -23,17 +23,47 @@ func TestNewAppClientBasic(t *testing.T) {
 	time.Sleep(20 * time.Millisecond)
 }
 
-func TestNewAppClientRunSync(t *testing.T) {
+func TestGetFDesc(t *testing.T) {
 	port, cancel, err := RunTestServer(func(as AppServer) {
 		as.Catalog().DeclareFunction(
-			FunctionDesc{Name: "TestNewAppClientBasic"},
+			FunctionDesc{Name: "TestGetFDesc"},
 			&stf.WrappedFunction{
+				json.Marshal, json.Unmarshal,
+				func() any {
+					a := ""
+					return &a
+				},
 				func() any {
 					a := ""
 					return &a
 				},
 				func(ctx context.Context, a any) any {
-					return fmt.Sprintf("TestNewAppClientBasic: %v", a)
+					return fmt.Sprintf("TestGetFDesc: %v", a)
+				},
+			}, nil, nil)
+	})
+	require.NoError(t, err)
+	ac, err := NewAppClient(context.Background(), "localhost:"+port, GetLoggerFor("client"))
+	require.NoError(t, err)
+	require.NotNil(t, ac)
+	time.Sleep(10 * time.Millisecond)
+	fd, err := ac.GetFDesc("TestGetFDesc")
+	require.NoError(t, err)
+	require.NotNil(t, fd)
+	require.Equal(t, "TestGetFDesc", fd.Name)
+	cancel()
+	time.Sleep(20 * time.Millisecond)
+}
+
+func TestNewAppClientRunSync(t *testing.T) {
+	port, cancel, err := RunTestServer(func(as AppServer) {
+		as.Catalog().DeclareFunction(
+			FunctionDesc{Name: "TestNewAppClientRunSync"},
+			&stf.WrappedFunction{
+				json.Marshal, json.Unmarshal,
+				templateForString, templateForString,
+				func(ctx context.Context, a any) any {
+					return fmt.Sprintf("TestNewAppClientRunSync: %v", a)
 				},
 			}, nil, nil)
 	})
@@ -44,7 +74,7 @@ func TestNewAppClientRunSync(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 	for i := 0; i < 5; i++ {
 		var sOut string
-		err = ac.RunSyncFunction("TestNewAppClientBasic", "", fmt.Sprintf("#%03d", i), &sOut)
+		err = ac.RunSyncFunction("TestNewAppClientRunSync", "", fmt.Sprintf("#%03d", i), &sOut)
 		require.NoError(t, err)
 	}
 	cancel()

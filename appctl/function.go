@@ -23,11 +23,25 @@ type OStreamDesc struct {
 	StreamDesc `json:""`
 }
 
+type Marshaller int
+
+const (
+	MarshalNone Marshaller = iota
+	MarshalJson
+	MarshalYaml
+)
+
+type WrapperDesc struct {
+	InMarshaller  Marshaller `json:"inMarshaller"`
+	OutMarshaller Marshaller `json:"outMarshaller"`
+}
+
 type FunctionDesc struct {
 	Name       string        `json:"name"`
 	Terminable bool          `json:"terminable"`
 	IStreams   []IStreamDesc `json:"iStreams"`
 	OStreams   []OStreamDesc `json:"oStreams"`
+	Wrapper    WrapperDesc   `json:"wrapper"`
 }
 
 type IStreamHandler struct {

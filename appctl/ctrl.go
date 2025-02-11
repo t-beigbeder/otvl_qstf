@@ -3,6 +3,7 @@ package appctl
 import (
 	"encoding/binary"
 	"fmt"
+	"github.com/t-beigbeder/otvl_qstf/internal/bfio"
 	"sync"
 )
 
@@ -76,17 +77,29 @@ func NextId(prefix string) string {
 const (
 	CmdAddIStream      = "AddIStream"
 	CmdAddOStream      = "AddOStream"
+	CmdGetFDesc        = "GetFDesc"
 	CmdRunSyncFunction = "RunSyncFunction"
 	CmdNewFunction     = "NewFunction"
 	CmdFuncAddIStream  = "FuncAddIStream"
 	CmdFuncAddOStream  = "FuncAddOStream"
 	CmdFuncOper        = "FuncOper"
 	MaxReqSize         = 256
-	MaxRspSize         = 256
+	MaxRspSize         = 1024
+	MaxInPlSize        = bfio.MaxBufWriterSize
+	MaxOutPlSize       = bfio.MaxBufWriterSize
 )
 
 type AddStreamReqMsg struct {
 	StreamId string `json:"streamId"`
+}
+
+type GetFDescReqMsg struct {
+	FdName string `json:"fdName"`
+}
+
+type GetFDescRespMsg struct {
+	Error string       `json:"error"`
+	Desc  FunctionDesc `json:"desc"`
 }
 
 type RunSyncFunctionReqMsg struct {
@@ -99,10 +112,7 @@ type NewFunctionReqMsg struct {
 	FuncId string `json:"funcId"`
 }
 
-type NewFunctionRespMsg struct {
-	Error string       `json:"error"`
-	Desc  FunctionDesc `json:"desc"`
-}
+type NewFunctionRespMsg GetFDescRespMsg
 
 type FuncAddStreamReqMsg struct {
 	FuncId   string `json:"funcId"`
@@ -131,6 +141,7 @@ func GetReqDesc(cmd string) *ReqDesc {
 	reqDescs := map[string]ReqDesc{
 		CmdAddIStream:      {func() any { return &AddStreamReqMsg{} }, func() any { return &RespMsg{} }},
 		CmdAddOStream:      {func() any { return &AddStreamReqMsg{} }, func() any { return &RespMsg{} }},
+		CmdGetFDesc:        {func() any { return &GetFDescReqMsg{} }, func() any { return &GetFDescRespMsg{} }},
 		CmdRunSyncFunction: {func() any { return &RunSyncFunctionReqMsg{} }, func() any { return &RespMsg{} }},
 		CmdNewFunction:     {func() any { return &NewFunctionReqMsg{} }, func() any { return &NewFunctionRespMsg{} }},
 		CmdFuncAddIStream:  {func() any { return &FuncAddStreamReqMsg{} }, func() any { return &RespMsg{} }},

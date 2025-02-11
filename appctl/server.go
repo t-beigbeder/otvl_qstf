@@ -1,11 +1,13 @@
 package appctl
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"github.com/quic-go/quic-go"
+	"github.com/t-beigbeder/otvl_qstf/internal/bfio"
 	"github.com/t-beigbeder/otvl_qstf/internal/netutils"
 	"github.com/t-beigbeder/otvl_qstf/stf"
 	"io"
@@ -79,6 +81,8 @@ func (ac *appServerCnc) Handle() error {
 		ac.controlWorkload(cmd, rid, areq, nil, getOStream)
 	case CmdAddIStream:
 		ac.controlWorkload(cmd, rid, areq, nil, addIStream)
+	case CmdGetFDesc:
+		ac.controlWorkload(cmd, rid, areq, nil, getFDesc)
 	case CmdRunSyncFunction:
 		ac.controlWorkload(cmd, rid, areq, payload, runSyncFunction)
 	case CmdNewFunction:
@@ -171,11 +175,22 @@ func addIStream(ac *appServerCnc, _ uint64, areq any, _ []byte) (any, []byte) {
 	return rsp, nil
 }
 
+func getFDesc(ac *appServerCnc, _ uint64, areq any, _ []byte) (any, []byte) {
+	req, _ := areq.(*GetFDescReqMsg)
+	fd, _, _, _, err := ac.cat.GetFunction(req.FdName)
+	rsp := &GetFDescRespMsg{}
+	if err != nil {
+		rsp.Error = err.Error()
+	}
+	rsp.Desc = *fd
+	return rsp, nil
+}
+
 func runSyncFunction(ac *appServerCnc, _ uint64, areq any, rqPl []byte) (arsp any, rsPl []byte) {
 	req, _ := areq.(*RunSyncFunctionReqMsg)
 	rsp := &RespMsg{}
 	arsp = rsp
-	_, _, wf, _, err := ac.cat.GetFunction(req.FdName)
+	fd, _, wf, _, err := ac.cat.GetFunction(req.FdName)
 	if err != nil {
 		rsp.Error = err.Error()
 		return
@@ -184,17 +199,37 @@ func runSyncFunction(ac *appServerCnc, _ uint64, areq any, rqPl []byte) (arsp an
 		rsp.Error = fmt.Sprintf("function %s has no wrapped function, currently not supported", req.FdName)
 		return
 	}
-	//fw, err := stf.NewSyncFuncWrapper(
-	//	ac.cnc.GetCtx(),
-	//	*wf,
-	//	ac.cnc.GetSyncStream(),
-	//	ac.cnc.GetSyncStream(),
-	//)
-
+	values := make(map[string]any)
+	fcCtx := context.WithValue(ac.ctx, "values", values)
+	in := bytes.NewReader(rqPl)
+	out := bfio.NewBufWr()
+	fc, err := stf.NewSyncFuncWrapper(
+		fcCtx,
+		*wf,
+		in,
+		out,
+	)
 	if err != nil {
 		rsp.Error = err.Error()
+		return
 	}
-	return rsp, nil
+	values["fc"] = fc
+	err = ac.cnc.NewFunction(req.FuncId, fc, fd, nil)
+	if err != nil {
+		rsp.Error = err.Error()
+		return
+	}
+	err = fc.Run()
+	if err != nil {
+		rsp.Error = err.Error()
+		return
+	}
+	rsPl, err = wf.Marshaller(out.Bytes())
+	if err != nil {
+		rsp.Error = err.Error()
+		return
+	}
+	return
 }
 
 func newFunction(ac *appServerCnc, _ uint64, areq any, _ []byte) (arsp any, _ []byte) {

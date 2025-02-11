@@ -25,8 +25,11 @@ func (sw *sfwStartWait) Wait(_ context.Context) error {
 }
 
 type WrappedFunction struct {
-	InputTemplate func() any
-	Wrapped       func(context.Context, any) any
+	Marshaller     func(any) ([]byte, error)
+	Unmarshal      func(data []byte, v any) error
+	InputTemplate  func() any
+	OutputTemplate func() any
+	Wrapped        func(context.Context, any) any
 }
 
 func NewSyncFuncWrapper(ctx context.Context, wf WrappedFunction, rr io.Reader, wr io.Writer, opts ...FcOption) (Function, error) {

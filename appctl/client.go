@@ -167,6 +167,7 @@ func (fc *fcClient) Terminate() error {
 type AppClient interface {
 	AddIStream(id string) (OStream, error)
 	GetOStream(id string) (IStream, error)
+	GetFDesc(fName string) (*FunctionDesc, error)
 	RunSyncFunction(fName string, id string, in any, out any) error
 	NewFunction(fName string, id string) (FcClient, error)
 	GetFunction(id string) FcClient
@@ -408,6 +409,33 @@ func (ac *appClient) GetOStream(id string) (IStream, error) {
 		return nil, errors.New(arsp.Error)
 	}
 	return is, nil
+}
+
+func (ac *appClient) GetFDesc(fName string) (*FunctionDesc, error) {
+	req := GetFDescReqMsg{FdName: fName}
+	rsp := GetFDescRespMsg{}
+	rqDc := ac.launchBg(
+		func(rid uint64, req, _, rsp, _ any) error {
+			err := ac.sendCtrl(rid, CmdGetFDesc, req, nil)
+			if err != nil {
+				return err
+			}
+			return nil
+		},
+		&req, nil, &rsp, nil,
+	)
+	rspData := <-rqDc
+	if rspData.Err != nil {
+		return nil, rspData.Err
+	}
+	arsp, ok := rspData.Rsp.(*GetFDescRespMsg)
+	if !ok {
+		return nil, fmt.Errorf("unexpected rsp type: %T", rspData.Rsp)
+	}
+	if arsp.Error != "" {
+		return nil, errors.New(arsp.Error)
+	}
+	return &arsp.Desc, nil
 }
 
 func (ac *appClient) RunSyncFunction(fName string, id string, in any, out any) error {
