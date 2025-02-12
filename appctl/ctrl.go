@@ -98,6 +98,9 @@ const (
 	QServerCloseNoError quic.ApplicationErrorCode = iota
 	QServerInitError
 	QServerProtoError
+	QClientCloseNoError
+	QClientInitError
+	QClientProtoError
 )
 
 const (

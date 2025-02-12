@@ -171,6 +171,7 @@ type AppClient interface {
 	RunSyncFunction(fName string, id string, im Marshaller, in any, out any) error
 	NewFunction(fName string, id string) (FcClient, error)
 	GetFunction(id string) FcClient
+	Close()
 }
 
 type appClient struct {
@@ -181,6 +182,7 @@ type appClient struct {
 	reqChans   map[RidBs]chan RspData
 	rspChans   map[RidBs]chan RspData
 	rspRspVals map[RidBs]any
+	err        error
 	cnc        Connection
 	funcs      map[string]FcClient
 	logger     *slog.Logger
@@ -199,7 +201,7 @@ func (ac *appClient) recvCtrl() {
 	stream := ac.cnc.GetCtrlStream()
 	bs := make([]byte, 16)
 	if _, err = io.ReadFull(stream, bs); err != nil {
-		ac.logger.Error("Read ctrl stream header error", "err", err)
+		ac.err = fmt.Errorf("Read ctrl stream header error %v", err)
 		ac.cancel()
 		return
 	}
@@ -220,26 +222,26 @@ func (ac *appClient) recvCtrl() {
 
 	lnRs = LenBs(bs[8:]).Get()
 	if lnRs > MaxRspSize {
-		ac.logger.Error("Read rsp too large", "lnRs", lnRs)
+		ac.err = fmt.Errorf("read rsp too large %d", lnRs)
 		ac.cancel()
 		return
 	}
 	lnPl = LenBs(bs[12:]).Get()
 	if lnPl > MaxOutPlSize {
-		ac.logger.Error("Read rsp payload too large", "lnPl", lnPl)
+		ac.err = fmt.Errorf("read rsp payload too large %d", lnPl)
 		ac.cancel()
 		return
 	}
 	bs = make([]byte, lnRs)
 	if _, err = io.ReadFull(stream, bs); err != nil {
-		ac.logger.Error("Read ctrl stream rsp error", "err", err)
+		ac.err = fmt.Errorf("read ctrl stream rsp error %v", err)
 		ac.cancel()
 		return
 	}
 	if lnPl != 0 {
 		payload = make([]byte, lnPl)
 		if _, err = io.ReadFull(stream, payload); err != nil {
-			ac.logger.Error("Read ctrl stream rsp payload error", "err", err)
+			ac.err = fmt.Errorf("read ctrl stream rsp payload error %v", err)
 			ac.cancel()
 			return
 		}
@@ -251,7 +253,7 @@ func (ac *appClient) recvCtrl() {
 		return
 	}
 	if err = json.Unmarshal(bs, val); err != nil {
-		ac.logger.Error("Read rsp json error", "err", err)
+		ac.err = fmt.Errorf("Read rsp json error %v", err)
 		return
 	}
 }
@@ -335,7 +337,13 @@ func (ac *appClient) launchBg(
 			rd  *RspData
 		)
 		defer func() {
-			ac.reqChans[bs] <- RspData{Rid: reqId, Err: err, Rsp: rsp, Payload: rspPl}
+			select {
+			case <-ac.ctx.Done():
+				return
+			default:
+				ac.reqChans[bs] <- RspData{Rid: reqId, Err: err, Rsp: rsp, Payload: rspPl}
+			}
+
 		}()
 		err = workLoad(reqId, req, rqPl, rsp, rspPl)
 		if err != nil {
@@ -468,7 +476,12 @@ func (ac *appClient) RunSyncFunction(fName string, id string, im Marshaller, in 
 		},
 		&req, in, &rsp, out,
 	)
-	rspData := <-rqDc
+	var rspData RspData
+	select {
+	case rspData = <-rqDc:
+	case <-ac.ctx.Done():
+		return ac.ctx.Err()
+	}
 	if rspData.Err != nil {
 		return rspData.Err
 	}
@@ -526,12 +539,18 @@ func (ac *appClient) GetFunction(id string) FcClient {
 	return fc
 }
 
-func (ac *appClient) close(err error) error {
-	ac.logger.Info("close app client requested", "cn", ac.cnc, "err", err)
-	for _, rqc := range ac.reqChans {
-		close(rqc)
+func (ac *appClient) Close() {
+	sErr := ""
+	se := QClientCloseNoError
+	if ac.err != nil {
+		ac.logger.Error("close app client with error", "err", ac.err.Error())
+		se = QClientProtoError
+		sErr = ac.err.Error()
+	} else {
+		ac.logger.Info("close app client requested", "cn", ac.cnc, "err", ac.err)
 	}
-	return err
+	ac.cancel()
+	ac.cnc.GetQuicConnection().CloseWithError(se, sErr)
 }
 
 func NewAppClient(pCtx context.Context, sAddr string, logger *slog.Logger) (AppClient, error) {
@@ -545,12 +564,13 @@ func NewAppClient(pCtx context.Context, sAddr string, logger *slog.Logger) (AppC
 	}
 	defer func() {
 		if err != nil {
-			qc.CloseWithError(0, "")
+			qc.CloseWithError(QClientInitError, err.Error())
 		}
 	}()
 	ctx, cancel := context.WithCancel(pCtx)
 	cnc := NewConnection(ctx, qc, "client", false, false, logger)
 	if err := cnc.SetCtrlStream(); err != nil {
+		cancel()
 		return nil, err
 	}
 	ac := &appClient{
@@ -568,7 +588,7 @@ func NewAppClient(pCtx context.Context, sAddr string, logger *slog.Logger) (AppC
 		for {
 			select {
 			case <-ac.ctx.Done():
-				ac.close(errors.New("app client closed"))
+				ac.Close()
 				return
 			}
 		}
