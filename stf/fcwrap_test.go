@@ -18,15 +18,7 @@ func TestNewSyncFuncWrapperBasic(t *testing.T) {
 	out := bfio.NewBufWr()
 	fcw, err := NewSyncFuncWrapper(context.Background(),
 		WrappedFunction{
-			json.Marshal, json.Unmarshal,
-			func() any {
-				a := ""
-				return &a
-			},
-			func() any {
-				a := ""
-				return &a
-			},
+			json.Marshal, json.Unmarshal, templateForString, templateForString,
 			func(_ context.Context, a any) any {
 				return "response for " + *(a.(*string))
 			},
@@ -47,15 +39,7 @@ func TestNewSyncFuncWrapperSlow(t *testing.T) {
 	out := bfio.NewBufWr()
 	fcw, err := NewSyncFuncWrapper(context.Background(),
 		WrappedFunction{
-			json.Marshal, json.Unmarshal,
-			func() any {
-				a := ""
-				return &a
-			},
-			func() any {
-				a := ""
-				return &a
-			},
+			json.Marshal, json.Unmarshal, templateForString, templateForString,
 			func(_ context.Context, a any) any {
 				time.Sleep(time.Millisecond * 200)
 				return "response for " + *(a.(*string))
@@ -86,15 +70,9 @@ func TestNewSyncFuncWrapperLarge(t *testing.T) {
 	fcw, err := NewSyncFuncWrapper(context.Background(),
 		WrappedFunction{
 			json.Marshal, json.Unmarshal,
-			func() any {
-				return &[]dst{}
-			},
-			func() any {
-				return &[]dst{}
-			},
-			func(_ context.Context, a any) any {
-				return a
-			},
+			func() any { return &[]dst{} },
+			func() any { return &[]dst{} },
+			func(_ context.Context, a any) any { return a },
 		},
 		in, out)
 	require.NoError(t, err)

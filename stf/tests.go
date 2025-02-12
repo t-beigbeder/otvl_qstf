@@ -30,3 +30,8 @@ func fromJsonBytes(wr bfio.BufWriter, a any) error {
 	}
 	return nil
 }
+
+func templateForString() any {
+	a := ""
+	return &a
+}

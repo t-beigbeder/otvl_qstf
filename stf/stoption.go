@@ -125,6 +125,10 @@ func IstASet(unmarshal func(data []byte, v any) error, na func() any, aset func(
 type OstOptions struct {
 	StOptions
 
+	// CloseOnTerminate if set and if embedded stream supports Closer interface,
+	// calls Close() on stream termination
+	CloseOnTerminate bool
+
 	// BGet enables to request on demand the data to be written from the client.
 	BGet func(context.Context) ([]byte, error)
 
@@ -166,6 +170,14 @@ func OstMaxLen(i int) OstOption {
 func OstMaxNb(i int) OstOption {
 	return func(o *OstOptions) error {
 		o.MaxNb = i
+		return nil
+	}
+}
+
+// OstCloseOnTerminate is a OstOption to close the embedded stream on termination
+func OstCloseOnTerminate(b bool) OstOption {
+	return func(o *OstOptions) error {
+		o.CloseOnTerminate = b
 		return nil
 	}
 }

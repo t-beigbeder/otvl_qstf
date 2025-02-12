@@ -3,6 +3,7 @@ package stf
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 )
@@ -45,6 +46,7 @@ type Stream interface {
 	Stop()
 	Terminate()
 	looper() looperOut
+	close() error
 }
 
 type InStream interface {
@@ -97,6 +99,13 @@ func (st *stream) GetState() StreamState {
 }
 
 func (st *stream) loop(sti Stream) {
+	defer func() {
+		cerr := sti.close()
+		if cerr != nil {
+			st.err = errors.Join(st.err, cerr)
+		}
+	}()
+
 	for {
 		select {
 		case <-st.ctx.Done():
@@ -109,7 +118,7 @@ func (st *stream) loop(sti Stream) {
 				lo := sti.looper()
 				if lo != loNil {
 					if lo.err != nil {
-						st.err = lo.err
+						st.err = errors.Join(st.err, lo.err)
 					}
 					st.state = StTerminated
 					return
@@ -217,6 +226,10 @@ func (is *inStream) looper() looperOut {
 	}
 }
 
+func (is *inStream) close() error {
+	return nil
+}
+
 func (is *inStream) Read(p []byte) (n int, err error) {
 	select {
 	case <-is.ctx.Done():
@@ -310,6 +323,17 @@ func (os *outStream) looper() looperOut {
 			return looperOut{maxProcessed: true}
 		}
 	}
+}
+
+func (os *outStream) close() error {
+	if !os.opts.CloseOnTerminate {
+		return nil
+	}
+	cer, ok := os.wr.(io.Closer)
+	if !ok {
+		return fmt.Errorf("writer does not implement Closer (%T)", os.wr)
+	}
+	return cer.Close()
 }
 
 func (os *outStream) Write(p []byte) (n int, err error) {

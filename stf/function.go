@@ -39,6 +39,7 @@ type Function interface {
 	Start() error
 	Wait() error
 	Terminate()
+	Close()
 	State() FunctionState
 	Options() FcOptions
 	Error() error
@@ -106,16 +107,16 @@ func (fc *function) GetOutStream(s string) OutStream {
 }
 
 func (fc *function) GetInStreams() []InStream {
-	res := make([]InStream, 0, len(fc.ins))
-	for _, in := range fc.ins {
+	res := make([]InStream, 0, len(fc.inList))
+	for _, in := range fc.inList {
 		res = append(res, in)
 	}
 	return res
 }
 
 func (fc *function) GetOutStreams() []OutStream {
-	res := make([]OutStream, 0, len(fc.outs))
-	for _, out := range fc.outs {
+	res := make([]OutStream, 0, len(fc.outList))
+	for _, out := range fc.outList {
 		res = append(res, out)
 	}
 	return res
@@ -213,13 +214,6 @@ func (fc *function) Start() error {
 		for {
 			select {
 			case <-fc.ctrChan:
-				for _, in := range fc.ins {
-					in.stream.Terminate()
-				}
-				for _, out := range fc.outs {
-					out.stream.Terminate()
-				}
-				fc.setState(StateFinished, nil)
 				return
 			}
 		}
@@ -265,6 +259,16 @@ func (fc *function) Terminate() {
 	if fc.terminable {
 		fc.ctrChan <- struct{}{}
 	}
+}
+
+func (fc *function) Close() {
+	for _, in := range fc.ins {
+		in.stream.Terminate()
+	}
+	for _, out := range fc.outs {
+		out.stream.Terminate()
+	}
+	fc.Terminate()
 }
 
 func (fc *function) State() FunctionState {

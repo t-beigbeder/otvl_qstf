@@ -65,7 +65,7 @@ func TestTerminable(t *testing.T) {
 		IstBSet(
 			func(_ context.Context, bs []byte) error {
 				sw.results <- string(bs)
-				time.Sleep(40 * time.Millisecond)
+				time.Sleep(5 * time.Millisecond)
 				return nil
 			}))
 	require.NoError(t, err)
@@ -76,7 +76,6 @@ func TestTerminable(t *testing.T) {
 	}()
 	sw.is = is
 	err = fc.Run()
-	require.Error(t, err) // FIXME: to be reviewed
-	require.Contains(t, err.Error(), "unexpected terminate message")
+	require.Contains(t, err.Error(), "EOF")
 	require.Contains(t, err.Error(), "OstBGet no more data")
 }
