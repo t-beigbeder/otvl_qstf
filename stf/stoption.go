@@ -126,7 +126,7 @@ type OstOptions struct {
 	StOptions
 
 	// CloseOnTerminate if set and if embedded stream supports Closer interface,
-	// calls Close() on stream termination
+	// calls close() on stream termination
 	CloseOnTerminate bool
 
 	// BGet enables to request on demand the data to be written from the client.

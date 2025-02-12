@@ -7,11 +7,6 @@ import (
 	"log/slog"
 )
 
-func (ac *appServerCnc) xxx() {
-
-}
-
-// TODO: move function related stuff to server-only connection
 func (ac *appServerCnc) newFunction(id string, fc stf.Function, fd *FunctionDesc, sths *StreamHandlers) error {
 	ac.mux.Lock()
 	defer ac.mux.Unlock()

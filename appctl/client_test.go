@@ -164,6 +164,7 @@ func TestNewAppClientRunSyncRspLarge(t *testing.T) {
 	}
 	err = ac.RunSyncFunction("TestNewAppClientRunSyncRspLarge", "", MarshalJson, genNotSoLargeString(), &sOut)
 	require.Error(t, err)
+	time.Sleep(20 * time.Millisecond)
 	cancel()
 	time.Sleep(20 * time.Millisecond)
 }

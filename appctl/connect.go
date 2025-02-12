@@ -26,6 +26,8 @@ type Connection interface {
 	AddOStream(id string) (OStream, error)
 	GetIStream(id string) IStream
 	GetOStream(id string) OStream
+	GetIStreams() map[string]IStream
+	GetOStreams() map[string]OStream
 }
 
 type connection struct {
@@ -175,4 +177,12 @@ func (c *connection) GetIStream(id string) IStream {
 func (c *connection) GetOStream(id string) OStream {
 	os, _ := c.oss[id]
 	return os
+}
+
+func (c *connection) GetIStreams() map[string]IStream {
+	return c.iss
+}
+
+func (c *connection) GetOStreams() map[string]OStream {
+	return c.oss
 }

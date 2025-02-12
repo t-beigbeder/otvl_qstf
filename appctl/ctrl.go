@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"github.com/quic-go/quic-go"
 	"github.com/t-beigbeder/otvl_qstf/internal/bfio"
 	"gopkg.in/yaml.v3"
 	"sync"
@@ -89,6 +90,19 @@ const (
 	MaxRspSize         = 1024
 	MaxInPlSize        = bfio.MaxBufWriterSize / 2
 	MaxOutPlSize       = bfio.MaxBufWriterSize / 2
+)
+
+type StfQErr quic.ApplicationErrorCode
+
+const (
+	QServerCloseNoError quic.ApplicationErrorCode = iota
+	QServerInitError
+	QServerProtoError
+)
+
+const (
+	QServerStreamNoError quic.StreamErrorCode = iota
+	QServerStreamProtoError
 )
 
 type AddStreamReqMsg struct {

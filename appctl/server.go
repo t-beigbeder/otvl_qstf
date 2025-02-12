@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/quic-go/quic-go"
 	"github.com/t-beigbeder/otvl_qstf/internal/bfio"
@@ -17,7 +18,6 @@ import (
 
 type AppServerCnc interface {
 	Handle() error
-	Close(error) error
 	GetLogger() *slog.Logger
 }
 
@@ -27,6 +27,7 @@ type appServerCnc struct {
 	cancel context.CancelFunc
 	cnc    Connection
 	cat    *FunctionCatalog
+	err    error
 	funcs  map[string]stf.Function
 	fds    map[string]*FunctionDesc
 	sthss  map[string]*StreamHandlers
@@ -106,12 +107,27 @@ func (ac *appServerCnc) Handle() error {
 	return nil
 }
 
-func (ac *appServerCnc) Close(err error) error {
-	sErr := ""
-	if err != nil {
-		sErr = err.Error()
+func (ac *appServerCnc) close() error {
+	se := QServerStreamNoError
+	if ac.err != nil {
+		se = QServerStreamProtoError
 	}
-	return ac.cnc.GetQuicConnection().CloseWithError(0, sErr)
+	for _, fc := range ac.funcs {
+		fc.Close()
+	}
+	for _, is := range ac.cnc.GetIStreams() {
+		is.QStream().CancelRead(se)
+	}
+	for _, os := range ac.cnc.GetOStreams() {
+		os.QStream().CancelWrite(se)
+	}
+	sErr := ""
+	aErr := QServerCloseNoError
+	if ac.err != nil {
+		aErr = QServerProtoError
+		sErr = ac.err.Error()
+	}
+	return ac.cnc.GetQuicConnection().CloseWithError(aErr, sErr)
 }
 
 func (ac *appServerCnc) controlWorkload(cmd string, rid uint64, areq any, payload []byte, workload func(ac *appServerCnc, rid uint64, areq any, payload []byte) (any, []byte)) {
@@ -120,8 +136,8 @@ func (ac *appServerCnc) controlWorkload(cmd string, rid uint64, areq any, payloa
 		err := ac.sendCtrl(rid, arsp, payload)
 		if err != nil {
 			ac.GetLogger().Error("Failed to send control response for workload", "cmd", cmd, "rid", rid, "err", err)
-			ac.cancel()
-			ac.cnc.GetQuicConnection().CloseWithError(0, err.Error()) // FIXME: harmonize
+			ac.cnc.GetCtrlStream().QStream().CancelRead(QServerStreamProtoError)
+			ac.err = errors.Join(ac.err, err)
 		}
 	}()
 }
@@ -430,7 +446,7 @@ func (as *appServer) NewCnc(qc quic.Connection) {
 	cnc := NewConnection(cCtx, qc, id, true, true, as.logger)
 	if err := cnc.SetCtrlStream(); err != nil {
 		cnc.GetLogger().Error("AppServerConnectionHandler", "err", err)
-		qc.CloseWithError(0, err.Error())
+		qc.CloseWithError(QServerInitError, err.Error())
 		return
 	}
 	ac := &appServerCnc{
@@ -443,16 +459,19 @@ func (as *appServer) NewCnc(qc quic.Connection) {
 		sthss:  make(map[string]*StreamHandlers),
 	}
 	as.cncs[id] = ac
+
 	defer func() {
-		ac.Close(err)
+		ac.close()
 		delete(as.cncs, id)
 	}()
+
 	for {
 		select {
 		case <-cnc.GetCtx().Done():
 			return
 		default:
 			if err = ac.Handle(); err != nil {
+				ac.err = errors.Join(ac.err, err)
 				return
 			}
 		}
