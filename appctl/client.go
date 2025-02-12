@@ -22,6 +22,7 @@ type FcClient interface {
 	Start() error
 	Wait() error
 	Terminate() error
+	Close() error
 }
 
 type fcClient struct {
@@ -56,7 +57,7 @@ func (fc *fcClient) AddIStream(is IStream) error {
 	}
 	rsp := RespMsg{}
 	ac := fc.ac
-	rqDc := ac.launchBg(
+	rqDc, rid := ac.launchBg(
 		func(rid uint64, req, rqPl, rsp, rspPl any) error {
 			err := ac.sendCtrl(rid, CmdFuncAddIStream, req, nil)
 			if err != nil {
@@ -66,6 +67,7 @@ func (fc *fcClient) AddIStream(is IStream) error {
 		},
 		&req, nil, &rsp, nil,
 	)
+	defer ac.freeForReq(rid)
 	rspData := <-rqDc
 	if rspData.Err != nil {
 		return rspData.Err
@@ -95,7 +97,7 @@ func (fc *fcClient) AddOStream(os OStream) error {
 	}
 	rsp := RespMsg{}
 	ac := fc.ac
-	rqDc := ac.launchBg(
+	rqDc, rid := ac.launchBg(
 		func(rid uint64, req, rqPl, rsp, rspPl any) error {
 			err := ac.sendCtrl(rid, CmdFuncAddOStream, req, nil)
 			if err != nil {
@@ -105,6 +107,7 @@ func (fc *fcClient) AddOStream(os OStream) error {
 		},
 		&req, nil, &rsp, nil,
 	)
+	defer ac.freeForReq(rid)
 	rspData := <-rqDc
 	if rspData.Err != nil {
 		return rspData.Err
@@ -123,7 +126,7 @@ func (fc *fcClient) funcOper(oper string) error {
 	req := FuncOperReqMsg{Oper: oper, FuncId: fc.id}
 	rsp := RespMsg{}
 	ac := fc.ac
-	rqDc := ac.launchBg(
+	rqDc, rid := ac.launchBg(
 		func(rid uint64, req, rqPl, rsp, rspPl any) error {
 			err := ac.sendCtrl(rid, CmdFuncOper, req, nil)
 			if err != nil {
@@ -133,6 +136,7 @@ func (fc *fcClient) funcOper(oper string) error {
 		},
 		&req, nil, &rsp, nil,
 	)
+	defer ac.freeForReq(rid)
 	rspData := <-rqDc
 	if rspData.Err != nil {
 		return rspData.Err
@@ -164,11 +168,15 @@ func (fc *fcClient) Terminate() error {
 	return fc.funcOper("terminate")
 }
 
+func (fc *fcClient) Close() error {
+	return fc.funcOper("close")
+}
+
 type AppClient interface {
 	AddIStream(id string) (OStream, error)
 	GetOStream(id string) (IStream, error)
 	GetFDesc(fName string) (*FunctionDesc, error)
-	RunSyncFunction(fName string, id string, im Marshaller, in any, out any) error
+	RunSyncFunction(fName string, id string, im Marshaller, in any, out any) (FcClient, error)
 	NewFunction(fName string, id string) (FcClient, error)
 	GetFunction(id string) FcClient
 	Close()
@@ -317,10 +325,20 @@ func (ac *appClient) waitResp(rid uint64) (*RspData, error) {
 	}
 }
 
+func (ac *appClient) freeForReq(rid uint64) {
+	ac.ctlMux.Lock()
+	defer ac.ctlMux.Unlock()
+	var bs RidBs
+	binary.BigEndian.PutUint64(bs[:], rid)
+	delete(ac.reqChans, bs)
+	delete(ac.rspChans, bs)
+	delete(ac.rspRspVals, bs)
+}
+
 func (ac *appClient) launchBg(
 	workLoad func(rid uint64, req, rqPl, rsp, rspPl any) error,
 	req, rqPl, rsp, rspPl any,
-) chan RspData {
+) (chan RspData, uint64) {
 	ac.ctlMux.Lock()
 	defer ac.ctlMux.Unlock()
 	ac.curReqId++
@@ -356,7 +374,7 @@ func (ac *appClient) launchBg(
 		rsp = rd.Rsp
 		rspPl = rd.Payload
 	}()
-	return ac.reqChans[bs]
+	return ac.reqChans[bs], reqId
 }
 
 func (ac *appClient) AddIStream(id string) (OStream, error) {
@@ -366,7 +384,7 @@ func (ac *appClient) AddIStream(id string) (OStream, error) {
 	req := AddStreamReqMsg{StreamId: id}
 	rsp := RespMsg{}
 	var os OStream
-	rqDc := ac.launchBg(
+	rqDc, rid := ac.launchBg(
 		func(rid uint64, req, _, rsp, _ any) error {
 			err := ac.sendCtrl(rid, CmdAddOStream, req, nil)
 			if err != nil {
@@ -380,6 +398,7 @@ func (ac *appClient) AddIStream(id string) (OStream, error) {
 		},
 		&req, nil, &rsp, nil,
 	)
+	defer ac.freeForReq(rid)
 	rspData := <-rqDc
 	if rspData.Err != nil {
 		return nil, rspData.Err
@@ -401,7 +420,7 @@ func (ac *appClient) GetOStream(id string) (IStream, error) {
 	req := AddStreamReqMsg{StreamId: id}
 	rsp := RespMsg{}
 	var is IStream
-	rqDc := ac.launchBg(
+	rqDc, rid := ac.launchBg(
 		func(rid uint64, req, _, rsp, _ any) error {
 			err := ac.sendCtrl(rid, CmdAddIStream, req, nil)
 			if err != nil {
@@ -415,6 +434,7 @@ func (ac *appClient) GetOStream(id string) (IStream, error) {
 		},
 		&req, nil, &rsp, nil,
 	)
+	defer ac.freeForReq(rid)
 	rspData := <-rqDc
 	if rspData.Err != nil {
 		return nil, rspData.Err
@@ -432,7 +452,7 @@ func (ac *appClient) GetOStream(id string) (IStream, error) {
 func (ac *appClient) GetFDesc(fName string) (*FunctionDesc, error) {
 	req := GetFDescReqMsg{FdName: fName}
 	rsp := GetFDescRespMsg{}
-	rqDc := ac.launchBg(
+	rqDc, rid := ac.launchBg(
 		func(rid uint64, req, _, rsp, _ any) error {
 			err := ac.sendCtrl(rid, CmdGetFDesc, req, nil)
 			if err != nil {
@@ -442,6 +462,7 @@ func (ac *appClient) GetFDesc(fName string) (*FunctionDesc, error) {
 		},
 		&req, nil, &rsp, nil,
 	)
+	defer ac.freeForReq(rid)
 	rspData := <-rqDc
 	if rspData.Err != nil {
 		return nil, rspData.Err
@@ -456,13 +477,13 @@ func (ac *appClient) GetFDesc(fName string) (*FunctionDesc, error) {
 	return &arsp.Desc, nil
 }
 
-func (ac *appClient) RunSyncFunction(fName string, id string, im Marshaller, in any, out any) error {
+func (ac *appClient) RunSyncFunction(fName string, id string, im Marshaller, in any, out any) (FcClient, error) {
 	if id == "" {
 		id = NextId(fmt.Sprintf("/%s/fc", fName))
 	}
 	req := RunSyncFunctionReqMsg{FdName: fName, FuncId: id}
 	rsp := RunSyncFunctionRespMsg{}
-	rqDc := ac.launchBg(
+	rqDc, rid := ac.launchBg(
 		func(rid uint64, req, rqPl, rsp, rspPl any) error {
 			rqPlBs, err := MarshallToWrapped(im, rqPl)
 			if err != nil {
@@ -476,30 +497,33 @@ func (ac *appClient) RunSyncFunction(fName string, id string, im Marshaller, in 
 		},
 		&req, in, &rsp, out,
 	)
+	defer ac.freeForReq(rid)
 	var rspData RspData
 	select {
 	case rspData = <-rqDc:
 	case <-ac.ctx.Done():
-		return ac.ctx.Err()
+		return nil, ac.ctx.Err()
 	}
 	if rspData.Err != nil {
-		return rspData.Err
+		return nil, rspData.Err
 	}
 	arsp, ok := rspData.Rsp.(*RunSyncFunctionRespMsg)
 	if !ok {
-		return fmt.Errorf("unexpected rsp type: %T", rspData.Rsp)
+		return nil, fmt.Errorf("unexpected rsp type: %T", rspData.Rsp)
 	}
 	if arsp.Error != "" {
-		return errors.New(arsp.Error)
+		return nil, errors.New(arsp.Error)
 	}
 	out2, err := UnmarshallFromWrapped(arsp.Desc.Wrapper.OutMarshaller, rspData.Payload, out)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if out2 != nil {
 		out = out2
 	}
-	return nil
+	fc := &fcClient{ac, rsp.Desc, id, nil, nil}
+	ac.funcs[id] = fc
+	return fc, nil
 }
 
 func (ac *appClient) NewFunction(fName string, id string) (FcClient, error) {
@@ -508,7 +532,7 @@ func (ac *appClient) NewFunction(fName string, id string) (FcClient, error) {
 	}
 	req := NewFunctionReqMsg{FdName: fName, FuncId: id}
 	rsp := NewFunctionRespMsg{}
-	rqDc := ac.launchBg(
+	rqDc, rid := ac.launchBg(
 		func(rid uint64, req, rqPl, rsp, rspPl any) error {
 			err := ac.sendCtrl(rid, CmdNewFunction, req, nil)
 			if err != nil {
@@ -518,6 +542,7 @@ func (ac *appClient) NewFunction(fName string, id string) (FcClient, error) {
 		},
 		&req, nil, &rsp, nil,
 	)
+	defer ac.freeForReq(rid)
 	rspData := <-rqDc
 	if rspData.Err != nil {
 		return nil, rspData.Err

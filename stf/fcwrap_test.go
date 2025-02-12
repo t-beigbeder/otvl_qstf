@@ -32,7 +32,7 @@ func TestNewSyncFuncWrapperBasic(t *testing.T) {
 	require.Equal(t, "response for value for test", a)
 }
 
-func TestNewSyncFuncWrapperSlow(t *testing.T) {
+func TestNewSyncFuncWrapperSlowBase(t *testing.T) {
 	wbs, err := toJsonBytes("value for test")
 	require.NoError(t, err)
 	in := bytes.NewReader(wbs)
@@ -81,4 +81,28 @@ func TestNewSyncFuncWrapperLarge(t *testing.T) {
 	var a []dst
 	err = fromJsonBytes(out, &a)
 	require.Equal(t, din, a)
+}
+
+func TestNewSyncFuncWrapperSlowClose(t *testing.T) {
+	wbs, err := toJsonBytes("value for test")
+	require.NoError(t, err)
+	in := bytes.NewReader(wbs)
+	out := bfio.NewBufWr()
+	fcw, err := NewSyncFuncWrapper(context.Background(),
+		WrappedFunction{
+			json.Marshal, json.Unmarshal, templateForString, templateForString,
+			func(_ context.Context, a any) any {
+				time.Sleep(time.Millisecond * 200)
+				return "response for " + *(a.(*string))
+			},
+		},
+		in, out)
+	require.NoError(t, err)
+	go func() {
+		time.Sleep(time.Millisecond * 50)
+		fcw.Close()
+	}()
+	err = fcw.Run()
+	require.NoError(t, err)
+	require.Nil(t, out.Bytes())
 }
