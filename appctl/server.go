@@ -12,6 +12,7 @@ import (
 	"github.com/t-beigbeder/otvl_qstf/stf"
 	"io"
 	"log/slog"
+	"sync"
 )
 
 type AppServerCnc interface {
@@ -21,10 +22,14 @@ type AppServerCnc interface {
 }
 
 type appServerCnc struct {
+	mux    sync.Mutex
 	ctx    context.Context
 	cancel context.CancelFunc
 	cnc    Connection
 	cat    *FunctionCatalog
+	funcs  map[string]stf.Function
+	fds    map[string]*FunctionDesc
+	sthss  map[string]*StreamHandlers
 }
 
 func (ac *appServerCnc) recvCtrl() (rid uint64, cmd string, req any, payload []byte, err error) {
@@ -227,7 +232,7 @@ func runSyncFunction(ac *appServerCnc, _ uint64, areq any, rqPl []byte) (arsp an
 		return
 	}
 	values["fc"] = fc
-	err = ac.cnc.NewFunction(req.FuncId, fc, fd, nil)
+	err = ac.newFunction(req.FuncId, fc, fd, nil)
 	if err != nil {
 		rsp.Error = err.Error()
 		return
@@ -277,7 +282,7 @@ func newFunction(ac *appServerCnc, _ uint64, areq any, _ []byte) (arsp any, _ []
 		return
 	}
 	values["fc"] = fc
-	err = ac.cnc.NewFunction(req.FuncId, fc, fd, sths)
+	err = ac.newFunction(req.FuncId, fc, fd, sths)
 
 	rsp.Desc = *fd
 	return rsp, nil
@@ -287,7 +292,7 @@ func funcAddIStream(ac *appServerCnc, _ uint64, areq any, _ []byte) (arsp any, _
 	req, _ := areq.(*FuncAddStreamReqMsg)
 	rsp := &RespMsg{}
 	arsp = rsp
-	fc, fd, sths := ac.cnc.GetFunction(req.FuncId)
+	fc, fd, sths := ac.getFunction(req.FuncId)
 	if fc == nil || fd == nil {
 		rsp.Error = fmt.Sprintf("Function %s does not exist", req.FuncId)
 		return
@@ -324,7 +329,7 @@ func funcAddOStream(ac *appServerCnc, _ uint64, areq any, _ []byte) (arsp any, _
 	req, _ := areq.(*FuncAddStreamReqMsg)
 	rsp := &RespMsg{}
 	arsp = rsp
-	fc, fd, sths := ac.cnc.GetFunction(req.FuncId)
+	fc, fd, sths := ac.getFunction(req.FuncId)
 	if fc == nil || fd == nil {
 		rsp.Error = fmt.Sprintf("Function %s does not exist", req.FuncId)
 		return
@@ -361,7 +366,7 @@ func funcOper(ac *appServerCnc, _ uint64, areq any, _ []byte) (arsp any, _ []byt
 	req, _ := areq.(*FuncOperReqMsg)
 	rsp := &RespMsg{}
 	arsp = rsp
-	fc, fd, _ := ac.cnc.GetFunction(req.FuncId)
+	fc, fd, _ := ac.getFunction(req.FuncId)
 	if fc == nil || fd == nil {
 		rsp.Error = fmt.Sprintf("Function %s does not exist", req.FuncId)
 		return
@@ -400,10 +405,6 @@ func (ac *appServerCnc) GetLogger() *slog.Logger {
 
 var _ AppServerCnc = &appServerCnc{}
 
-type FcServer interface {
-	GetFunction(id string) (stf.Function, error)
-}
-
 type AppServer interface {
 	Catalog() *FunctionCatalog
 	NewCnc(qc quic.Connection)
@@ -437,6 +438,9 @@ func (as *appServer) NewCnc(qc quic.Connection) {
 		cancel: cancel,
 		cnc:    cnc,
 		cat:    as.cat,
+		funcs:  make(map[string]stf.Function),
+		fds:    make(map[string]*FunctionDesc),
+		sthss:  make(map[string]*StreamHandlers),
 	}
 	as.cncs[id] = ac
 	defer func() {

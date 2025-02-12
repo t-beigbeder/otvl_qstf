@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/quic-go/quic-go"
-	"github.com/t-beigbeder/otvl_qstf/stf"
 	"io"
 	"log/slog"
 	"strconv"
@@ -27,12 +26,10 @@ type Connection interface {
 	AddOStream(id string) (OStream, error)
 	GetIStream(id string) IStream
 	GetOStream(id string) OStream
-	NewFunction(id string, fc stf.Function, fd *FunctionDesc, sths *StreamHandlers) error
-	GetFunction(id string) (stf.Function, *FunctionDesc, *StreamHandlers)
 }
 
 type connection struct {
-	mmux         sync.Mutex
+	mux          sync.Mutex
 	ctx          context.Context
 	qc           quic.Connection
 	id           string
@@ -41,9 +38,6 @@ type connection struct {
 	ctlStream    IOStream
 	iss          map[string]IStream
 	oss          map[string]OStream
-	funcs        map[string]stf.Function
-	fds          map[string]*FunctionDesc
-	sthss        map[string]*StreamHandlers
 	logger       *slog.Logger
 }
 
@@ -57,9 +51,6 @@ func NewConnection(ctx context.Context, qc quic.Connection, id string, isQuicSer
 		isAppServer:  isAppServer,
 		iss:          make(map[string]IStream),
 		oss:          make(map[string]OStream),
-		funcs:        make(map[string]stf.Function),
-		fds:          make(map[string]*FunctionDesc),
-		sthss:        make(map[string]*StreamHandlers),
 		logger:       logger.With("connId", id),
 	}
 	cn.ctx = context.WithValue(ctx, "cn", cn)
@@ -145,8 +136,8 @@ func (c *connection) GetCtrlStream() IOStream {
 }
 
 func (c *connection) AddIStream(id string) (IStream, error) {
-	c.mmux.Lock()
-	defer c.mmux.Unlock()
+	c.mux.Lock()
+	defer c.mux.Unlock()
 	_, ok := c.iss[id]
 	if ok {
 		return nil, fmt.Errorf("istream already exists: %s", id)
@@ -161,8 +152,8 @@ func (c *connection) AddIStream(id string) (IStream, error) {
 }
 
 func (c *connection) AddOStream(id string) (OStream, error) {
-	c.mmux.Lock()
-	defer c.mmux.Unlock()
+	c.mux.Lock()
+	defer c.mux.Unlock()
 	_, ok := c.oss[id]
 	if ok {
 		return nil, fmt.Errorf("ostream already exists: %s", id)
@@ -184,71 +175,4 @@ func (c *connection) GetIStream(id string) IStream {
 func (c *connection) GetOStream(id string) OStream {
 	os, _ := c.oss[id]
 	return os
-}
-
-// TODO: move function related stuff to server-only connection
-func (c *connection) NewFunction(id string, fc stf.Function, fd *FunctionDesc, sths *StreamHandlers) error {
-	c.mmux.Lock()
-	defer c.mmux.Unlock()
-	_, ok := c.funcs[id]
-	if ok {
-		return fmt.Errorf("function id %s already exists", id)
-	}
-	c.logger.Info("new function", "id", id)
-	c.funcs[id] = fc
-	c.fds[id] = fd
-	c.sthss[id] = sths
-	return nil
-}
-
-func (c *connection) GetFunction(id string) (stf.Function, *FunctionDesc, *StreamHandlers) {
-	fc, _ := c.funcs[id]
-	fd, _ := c.fds[id]
-	sths, _ := c.sthss[id]
-	return fc, fd, sths
-}
-
-func CurrentConnection(ctx context.Context) Connection {
-	if ctx.Value("cn") == nil {
-		return nil
-	}
-	cn, ok := ctx.Value("cn").(Connection)
-	if !ok {
-		return nil
-	}
-	return cn
-}
-
-func CurrentValues(ctx context.Context) map[string]any {
-	if ctx.Value("values") == nil {
-		return nil
-	}
-	values, ok := ctx.Value("values").(map[string]any)
-	if !ok {
-		return nil
-	}
-	return values
-}
-
-func CurrentFunction(ctx context.Context) stf.Function {
-	if ctx.Value("values") == nil {
-		return nil
-	}
-	values, ok := ctx.Value("values").(map[string]any)
-	if !ok {
-		return nil
-	}
-	fc, ok := values["fc"].(stf.Function)
-	if !ok {
-		return nil
-	}
-	return fc
-}
-
-func CurrentLogger(ctx context.Context) *slog.Logger {
-	cn := CurrentConnection(ctx)
-	if cn == nil {
-		return nil
-	}
-	return cn.GetLogger()
 }
