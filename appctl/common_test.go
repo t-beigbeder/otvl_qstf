@@ -51,6 +51,13 @@ func toJsonBytes(a any) ([]byte, error) {
 	return wbs, err
 }
 
+func toBytes(bs []byte) []byte {
+	wbs := make([]byte, len(bs)+4)
+	binary.BigEndian.PutUint32(wbs, uint32(len(bs)))
+	copy(wbs[4:], bs)
+	return wbs
+}
+
 func fromBytes(rr io.Reader) ([]byte, error) {
 	bs := make([]byte, 4)
 	_, err := io.ReadFull(rr, bs)
@@ -259,4 +266,39 @@ func NewAppClientWithFuncStdio(port string, fName string) (AppClient, FcClient, 
 		return nil, nil, nil, nil, err
 	}
 	return ac, fc, is, os, nil
+}
+
+func BgStdInOut(rr io.Reader, wr io.Writer, label string, isJson bool, out *string) {
+	var err error
+	bs := []byte("hello world " + label)
+	if isJson {
+		bs, err = toJsonBytes(string(bs))
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "toJsonBytes: %s\n", err)
+			return
+		}
+	} else {
+		bs = toBytes(bs)
+	}
+	_, err = wr.Write(bs)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "os.Write: %s\n", err)
+		return
+	}
+	time.Sleep(20 * time.Millisecond)
+
+	if isJson {
+		err = fromJsonBytes(rr, out)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "fromBytes: %s\n", err)
+			return
+		}
+	} else {
+		bs, err = fromBytes(rr)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "fromBytes: %s\n", err)
+			return
+		}
+		*out = string(bs)
+	}
 }

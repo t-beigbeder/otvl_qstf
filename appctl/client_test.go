@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"github.com/stretchr/testify/require"
 	"github.com/t-beigbeder/otvl_qstf/stf"
-	os2 "os"
 	"testing"
 	"time"
 )
@@ -248,33 +247,12 @@ func TestNewAppClientRunNTermFuncRaw(t *testing.T) {
 	_, fc, is, os, err := NewAppClientWithFuncStdio(port, t.Name())
 
 	bgRes := ""
-	go func() {
-		js, err := toJsonBytes("hello world TestNewAppClientRunNTermFuncRaw")
-		if err != nil {
-			fmt.Fprintf(os2.Stderr, "toJsonBytes: %s\n", err)
-			return
-		}
-		_, err = os.Write(js)
-		if err != nil {
-			fmt.Fprintf(os2.Stderr, "os.Write: %s\n", err)
-			return
-		}
-		time.Sleep(20 * time.Millisecond)
-
-		bs, err := fromBytes(is)
-		if err != nil {
-			fmt.Fprintf(os2.Stderr, "fromBytes: %s\n", err)
-			return
-		}
-		bgRes = string(bs)
-		fmt.Fprintf(os2.Stderr, "fromBytes: %s\n", string(bs))
-
-	}()
+	go BgStdInOut(is, os, t.Name(), false, &bgRes)
 
 	err = fc.Run()
 	require.NoError(t, err)
 	time.Sleep(40 * time.Millisecond)
-	require.Equal(t, "response to \"hello world TestNewAppClientRunNTermFuncRaw\"", bgRes)
+	require.Equal(t, "response to hello world TestNewAppClientRunNTermFuncRaw", bgRes)
 	cancel()
 }
 
@@ -291,27 +269,7 @@ func TestNewAppClientRunTermFunc(t *testing.T) {
 
 	bgRes := ""
 	go func() {
-		js, err := toJsonBytes("hello world")
-		if err != nil {
-			fmt.Fprintf(os2.Stderr, "toJsonBytes: %s\n", err)
-			return
-		}
-		_, err = os.Write(js)
-		if err != nil {
-			fmt.Fprintf(os2.Stderr, "os.Write: %s\n", err)
-			return
-		}
-		time.Sleep(100 * time.Millisecond)
-
-		res := ""
-		err = fromJsonBytes(is, &res)
-		if err != nil {
-			fmt.Fprintf(os2.Stderr, "fromJsonBytes: %s\n", err)
-			return
-		}
-		fmt.Fprintf(os2.Stderr, "fromJsonBytes: %s\n", res)
-		bgRes = res
-
+		BgStdInOut(is, os, t.Name(), true, &bgRes)
 		fc.Terminate()
 	}()
 
@@ -320,7 +278,7 @@ func TestNewAppClientRunTermFunc(t *testing.T) {
 	require.NoError(t, err)
 	err = fc.Terminate()
 	require.NoError(t, err)
-	require.Equal(t, "response to hello world", bgRes)
+	require.Equal(t, "response to hello world "+t.Name(), bgRes)
 
 	cancel()
 	time.Sleep(20 * time.Millisecond)
@@ -328,75 +286,18 @@ func TestNewAppClientRunTermFunc(t *testing.T) {
 
 func TestNewAppClientSWTermFunc(t *testing.T) {
 	port, cancel, err := RunTestServer(func(as AppServer) {
-		err := as.Catalog().DeclareFunction(
-			FunctionDesc{
-				Name:       "TestNewAppClientSWTermFunc",
-				Terminable: true,
-				IStreams: []IStreamDesc{
-					{
-						StreamDesc: StreamDesc{
-							Name:     "in",
-							Discrete: true,
-							MaxNb:    1,
-						},
-					},
-				},
-				OStreams: []OStreamDesc{
-					{
-						StreamDesc: StreamDesc{
-							Name:     "out",
-							Discrete: true,
-							MaxNb:    1,
-						},
-					},
-				},
-			},
-			nil,
-			&testSw{},
-			GetTSWSthsJson[string, string](),
-		)
+		err := JsonFuncDeclarer[string, string](t.Name(), true)(as.Catalog())
 		if err != nil {
 			t.Fatal(err)
 		}
 	})
 	require.NoError(t, err)
-	ac, err := NewAppClient(context.Background(), "localhost:"+port, GetLoggerFor("client"))
-	require.NoError(t, err)
-	require.NotNil(t, ac)
-	time.Sleep(10 * time.Millisecond)
-	os, err := ac.AddIStream("")
-	require.NoError(t, err)
-	is, err := ac.GetOStream("")
-	require.NoError(t, err)
-	_, _ = is, os
-	fc, err := ac.NewFunction("TestNewAppClientSWTermFunc", "")
-	require.NoError(t, err)
-	err = fc.AddOStream(os)
-	require.NoError(t, err)
-	err = fc.AddIStream(is)
+	_, fc, is, os, err := NewAppClientWithFuncStdio(port, t.Name())
 	require.NoError(t, err)
 
+	bgRes := ""
 	go func() {
-		js, err := toJsonBytes("hello world")
-		if err != nil {
-			fmt.Fprintf(os2.Stderr, "toJsonBytes: %s\n", err)
-			return
-		}
-		_, err = os.Write(js)
-		if err != nil {
-			fmt.Fprintf(os2.Stderr, "os.Write: %s\n", err)
-			return
-		}
-		time.Sleep(100 * time.Millisecond)
-
-		res := ""
-		err = fromJsonBytes(is, &res)
-		if err != nil {
-			fmt.Fprintf(os2.Stderr, "fromJsonBytes: %s\n", err)
-			return
-		}
-		fmt.Fprintf(os2.Stderr, "fromJsonBytes: %s\n", res)
-
+		BgStdInOut(is, os, t.Name(), true, &bgRes)
 		fc.Terminate()
 	}()
 
@@ -406,6 +307,7 @@ func TestNewAppClientSWTermFunc(t *testing.T) {
 	require.NoError(t, err)
 	err = fc.Terminate()
 	require.NoError(t, err)
+	require.Equal(t, "response to hello world "+t.Name(), bgRes)
 
 	cancel()
 	time.Sleep(20 * time.Millisecond)
