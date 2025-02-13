@@ -341,3 +341,29 @@ func TestNewAppClientSWCloseFunc(t *testing.T) {
 	cancel()
 	time.Sleep(20 * time.Millisecond)
 }
+
+func TestNewAppClientSWCloseClient(t *testing.T) {
+	port, _, err := RunTestServer(func(as AppServer) {
+		err := JsonFuncDeclarer[string, string](t.Name(), true)(as.Catalog())
+		if err != nil {
+			t.Fatal(err)
+		}
+	})
+	require.NoError(t, err)
+	ac, fc, is, os, err := NewAppClientWithFuncStdio(port, t.Name())
+	require.NoError(t, err)
+
+	bgRes := ""
+	go func() {
+		BgStdInOut(is, os, t.Name(), true, &bgRes)
+		ac.Close()
+		time.Sleep(20 * time.Millisecond)
+	}()
+
+	err = fc.Start()
+	require.NoError(t, err)
+	err = fc.Wait()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "context canceled")
+	time.Sleep(20 * time.Millisecond)
+}

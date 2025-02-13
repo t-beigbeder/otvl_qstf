@@ -137,7 +137,13 @@ func (fc *fcClient) funcOper(oper string) error {
 		&req, nil, &rsp, nil,
 	)
 	defer ac.freeForReq(rid)
-	rspData := <-rqDc
+	var rspData RspData
+	select {
+	case rspData = <-rqDc:
+		break
+	case <-ac.ctx.Done():
+		return ac.ctx.Err()
+	}
 	if rspData.Err != nil {
 		return rspData.Err
 	}
