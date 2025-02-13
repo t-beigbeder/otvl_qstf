@@ -253,6 +253,7 @@ func runSyncFunction(ac *appServerCnc, _ uint64, areq any, rqPl []byte) (arsp an
 		rsp.Error = err.Error()
 		return
 	}
+	defer ac.delFunction(req.FuncId)
 	err = fc.Run()
 	if err != nil {
 		rsp.Error = err.Error()
@@ -405,6 +406,8 @@ func funcOper(ac *appServerCnc, _ uint64, areq any, _ []byte) (arsp any, _ []byt
 		err = fc.Wait()
 	case "terminate":
 		fc.Terminate()
+	case "close":
+		err = ac.delFunction(req.FuncId)
 	default:
 		err = fmt.Errorf("Oper %s not supported", req.Oper)
 	}

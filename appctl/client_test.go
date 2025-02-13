@@ -308,6 +308,35 @@ func TestNewAppClientSWTermFunc(t *testing.T) {
 	err = fc.Terminate()
 	require.NoError(t, err)
 	require.Equal(t, "response to hello world "+t.Name(), bgRes)
+	err = fc.Close()
+	require.NoError(t, err)
+
+	cancel()
+	time.Sleep(20 * time.Millisecond)
+}
+
+func TestNewAppClientSWCloseFunc(t *testing.T) {
+	port, cancel, err := RunTestServer(func(as AppServer) {
+		err := JsonFuncDeclarer[string, string](t.Name(), true)(as.Catalog())
+		if err != nil {
+			t.Fatal(err)
+		}
+	})
+	require.NoError(t, err)
+	_, fc, is, os, err := NewAppClientWithFuncStdio(port, t.Name())
+	require.NoError(t, err)
+
+	bgRes := ""
+	go func() {
+		BgStdInOut(is, os, t.Name(), true, &bgRes)
+		fc.Close()
+	}()
+
+	err = fc.Start()
+	require.NoError(t, err)
+	err = fc.Wait()
+	require.NoError(t, err)
+	require.Equal(t, "response to hello world "+t.Name(), bgRes)
 
 	cancel()
 	time.Sleep(20 * time.Millisecond)

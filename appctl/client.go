@@ -255,7 +255,9 @@ func (ac *appClient) recvCtrl() {
 		}
 	}
 
+	ac.ctlMux.Lock()
 	val, ok := ac.rspRspVals[ridBs]
+	ac.ctlMux.Unlock()
 	if !ok {
 		ac.logger.Info("rsp values for rid not found", "rid", rid)
 		return

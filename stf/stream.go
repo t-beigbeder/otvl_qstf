@@ -142,7 +142,12 @@ func (st *stream) Stop() {
 }
 
 func (st *stream) Terminate() {
-	st.ctrChan <- msgTerminate
+	select {
+	case st.ctrChan <- msgTerminate:
+	default:
+		return
+	}
+
 }
 
 type inStream struct {

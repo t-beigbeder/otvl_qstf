@@ -257,7 +257,11 @@ func (fc *function) Run() error {
 
 func (fc *function) Terminate() {
 	if fc.terminable {
-		fc.ctrChan <- struct{}{}
+		select {
+		case fc.ctrChan <- struct{}{}:
+		default:
+			return
+		}
 	}
 }
 

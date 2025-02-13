@@ -21,6 +21,24 @@ func (ac *appServerCnc) newFunction(id string, fc stf.Function, fd *FunctionDesc
 	return nil
 }
 
+func (ac *appServerCnc) delFunction(id string) error {
+	ac.mux.Lock()
+	defer ac.mux.Unlock()
+	fc, ok := ac.funcs[id]
+	if !ok {
+		return fmt.Errorf("function id %s does not exist", id)
+	}
+	ac.cnc.GetLogger().Info("delete function", "id", id)
+	defer func() {
+		delete(ac.funcs, id)
+		delete(ac.fds, id)
+		delete(ac.sthss, id)
+	}()
+	fc.Close()
+	return nil
+
+}
+
 func (ac *appServerCnc) getFunction(id string) (stf.Function, *FunctionDesc, *StreamHandlers) {
 	fc, _ := ac.funcs[id]
 	fd, _ := ac.fds[id]
