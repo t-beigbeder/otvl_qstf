@@ -5,11 +5,13 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/quic-go/quic-go"
 	"github.com/t-beigbeder/otvl_qstf/internal/netutils"
 	"io"
 	"log/slog"
 	"os"
+	"time"
 )
 
 type TASInizer func(AppServer)
@@ -70,11 +72,6 @@ func fromJsonBytes(rr io.Reader, a any) error {
 		return err
 	}
 	return json.Unmarshal(bs, a)
-}
-
-func templateForString() any {
-	a := ""
-	return &a
 }
 
 type Tin struct {
@@ -144,6 +141,46 @@ func GetTSWSthsRaw() *StreamHandlers {
 	}
 }
 
+func GetTSWSthsJson[TI any, TO any]() *StreamHandlers {
+	return &StreamHandlers{
+		ihs: []IStreamHandler{
+			{
+				Unmarshal: json.Unmarshal,
+				NewASet:   func() any { return FactoryFor[TI]() },
+				ASet: func(ctx context.Context, a any) error {
+					CurrentLogger(ctx).Debug("GetTSWSthsJson ASet", "In", *(a.(*TI)))
+					vls := CurrentValues(ctx)
+					if vls == nil {
+						return errors.New("no values")
+					}
+					vls["In"] = *(a.(*TI))
+					oss := CurrentFunction(ctx).GetOutStreams()
+					oss[len(oss)-1].Start()
+					return nil
+				},
+			},
+		},
+		ohs: []OStreamHandler{
+			{
+				AGet: func(ctx context.Context) (any, error) {
+					CurrentLogger(ctx).Debug("GetTSWSthsJson AGet")
+					vls := CurrentValues(ctx)
+					if vls == nil {
+						return nil, errors.New("no values")
+					}
+					a, ok := vls["In"]
+					if !ok {
+						return nil, errors.New("no In in values")
+					}
+					CurrentLogger(ctx).Debug("GetTSWSthsJson AGet", "In", a)
+					return fmt.Sprintf("response to %s", a), nil
+				},
+				Marshaller: json.Marshal,
+			},
+		},
+	}
+}
+
 func getStdinDesc() []IStreamDesc {
 	return []IStreamDesc{
 		{
@@ -187,26 +224,39 @@ func JsonFuncDeclarer[TI any, TO any](fName string, terminable bool) func(*Funct
 			FunctionDesc{
 				Name:       fName,
 				Terminable: terminable,
-				IStreams: []IStreamDesc{
-					{
-						StreamDesc: StreamDesc{
-							Name:     "in",
-							Discrete: true,
-							MaxNb:    1,
-						},
-					},
-				},
-				OStreams: []OStreamDesc{
-					{
-						StreamDesc: StreamDesc{
-							Name:     "out",
-							Discrete: true,
-							MaxNb:    1,
-						},
-					},
-				},
+				IStreams:   getStdinDesc(),
+				OStreams:   getStdoutDesc(),
 			},
 			nil,
-			&TSW{}, GetTSWSthsRaw())
+			&TSW{}, GetTSWSthsJson[string, string]())
 	}
+}
+
+func NewAppClientWithFuncStdio(port string, fName string) (AppClient, FcClient, IStream, OStream, error) {
+	ac, err := NewAppClient(context.Background(), "localhost:"+port, GetLoggerFor("client"))
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+	time.Sleep(10 * time.Millisecond)
+	os, err := ac.AddIStream("in")
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+	is, err := ac.GetOStream("out")
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+	fc, err := ac.NewFunction(fName, "")
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+	err = fc.AddOStream(os)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+	err = fc.AddIStream(is)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+	return ac, fc, is, os, nil
 }

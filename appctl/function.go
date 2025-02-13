@@ -125,7 +125,7 @@ func (cat *FunctionCatalog) GetFunction(fName string) (*FunctionDesc, stf.StartW
 	return &fd, cat.sws[fName], cat.wrappedFns[fName], cat.sths[fName], nil
 }
 
-func factoryFor[T any]() any {
+func FactoryFor[T any]() any {
 	var a T
 	return &a
 }
@@ -139,7 +139,7 @@ func JsonSyncFuncDeclarer[TI any, TO any](fName string, wrp func(context.Context
 			},
 			&stf.WrappedFunction{
 				json.Marshal, json.Unmarshal,
-				factoryFor[TI], factoryFor[TO],
+				FactoryFor[TI], FactoryFor[TO],
 				func(ctx context.Context, a any) any {
 					var err error
 					ta, ok := a.(*TI)
