@@ -80,6 +80,7 @@ func NextId(prefix string) string {
 const (
 	CmdAddIStream      = "AddIStream"
 	CmdAddOStream      = "AddOStream"
+	CmdCloseStream     = "CloseStream"
 	CmdGetFDesc        = "GetFDesc"
 	CmdRunSyncFunction = "RunSyncFunction"
 	CmdNewFunction     = "NewFunction"
@@ -110,6 +111,11 @@ const (
 
 type AddStreamReqMsg struct {
 	StreamId string `json:"streamId"`
+}
+
+type CloseStreamReqMsg struct {
+	StreamId string `json:"streamId"`
+	IsIn     bool   `json:"isIn"`
 }
 
 type GetFDescReqMsg struct {
@@ -162,6 +168,7 @@ func GetReqDesc(cmd string) *ReqDesc {
 	reqDescs := map[string]ReqDesc{
 		CmdAddIStream:      {func() any { return &AddStreamReqMsg{} }, func() any { return &RespMsg{} }},
 		CmdAddOStream:      {func() any { return &AddStreamReqMsg{} }, func() any { return &RespMsg{} }},
+		CmdCloseStream:     {func() any { return &CloseStreamReqMsg{} }, func() any { return &RespMsg{} }},
 		CmdGetFDesc:        {func() any { return &GetFDescReqMsg{} }, func() any { return &GetFDescRespMsg{} }},
 		CmdRunSyncFunction: {func() any { return &RunSyncFunctionReqMsg{} }, func() any { return &RunSyncFunctionRespMsg{} }},
 		CmdNewFunction:     {func() any { return &NewFunctionReqMsg{} }, func() any { return &NewFunctionRespMsg{} }},

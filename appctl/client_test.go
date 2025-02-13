@@ -367,3 +367,42 @@ func TestNewAppClientSWCloseClient(t *testing.T) {
 	require.Contains(t, err.Error(), "context canceled")
 	time.Sleep(20 * time.Millisecond)
 }
+
+func TestNewAppClientCloseStream(t *testing.T) {
+	port, _, err := RunTestServer(func(as AppServer) {
+		err := JsonFuncDeclarer[string, string](t.Name(), true)(as.Catalog())
+		if err != nil {
+			t.Fatal(err)
+		}
+	})
+	require.NoError(t, err)
+	ac, fc, is, os, err := NewAppClientWithFuncStdio(port, t.Name())
+	require.NoError(t, err)
+
+	bgRes := ""
+	go func() {
+		BgStdInOut(is, os, t.Name(), true, &bgRes)
+	}()
+
+	err = fc.Start()
+	require.NoError(t, err)
+	time.Sleep(20 * time.Millisecond)
+	err = ac.CloseOStream(is.Id())
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "does not exist")
+	err = ac.CloseIStream(os.Id())
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "does not exist")
+	err = ac.CloseIStream(is.Id())
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "owned by function")
+	err = ac.CloseOStream(os.Id())
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "owned by function")
+	err = fc.Close()
+	require.NoError(t, err)
+	err = ac.CloseIStream(is.Id())
+	require.NoError(t, err)
+	err = ac.CloseOStream(os.Id())
+	require.NoError(t, err)
+}

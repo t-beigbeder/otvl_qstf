@@ -181,6 +181,8 @@ func (fc *fcClient) Close() error {
 type AppClient interface {
 	AddIStream(id string) (OStream, error)
 	GetOStream(id string) (IStream, error)
+	CloseIStream(id string) error
+	CloseOStream(id string) error
 	GetFDesc(fName string) (*FunctionDesc, error)
 	RunSyncFunction(fName string, id string, im Marshaller, in any, out any) (FcClient, error)
 	NewFunction(fName string, id string) (FcClient, error)
@@ -455,6 +457,47 @@ func (ac *appClient) GetOStream(id string) (IStream, error) {
 		return nil, errors.New(arsp.Error)
 	}
 	return is, nil
+}
+
+func (ac *appClient) closeStream(id string, isIn bool) error {
+	req := CloseStreamReqMsg{StreamId: id, IsIn: isIn}
+	rsp := RespMsg{}
+	rqDc, rid := ac.launchBg(
+		func(rid uint64, req, _, rsp, _ any) error {
+			err := ac.sendCtrl(rid, CmdCloseStream, req, nil)
+			if err != nil {
+				return err
+			}
+			err = ac.cnc.CloseStream(id, isIn)
+			if err != nil {
+				return err
+			}
+			return nil
+		},
+		&req, nil, &rsp, nil,
+	)
+	defer ac.freeForReq(rid)
+	rspData := <-rqDc
+	if rspData.Err != nil {
+		return rspData.Err
+	}
+	arsp, ok := rspData.Rsp.(*RespMsg)
+	if !ok {
+		return fmt.Errorf("unexpected rsp type: %T", rspData.Rsp)
+	}
+	if arsp.Error != "" {
+		return errors.New(arsp.Error)
+	}
+	return nil
+
+}
+
+func (ac *appClient) CloseIStream(id string) error {
+	return ac.closeStream(id, true)
+}
+
+func (ac *appClient) CloseOStream(id string) error {
+	return ac.closeStream(id, false)
 }
 
 func (ac *appClient) GetFDesc(fName string) (*FunctionDesc, error) {

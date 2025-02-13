@@ -88,6 +88,8 @@ func (ac *appServerCnc) Handle() error {
 		ac.controlWorkload(cmd, rid, areq, nil, getOStream)
 	case CmdAddIStream:
 		ac.controlWorkload(cmd, rid, areq, nil, addIStream)
+	case CmdCloseStream:
+		ac.controlWorkload(cmd, rid, areq, nil, closeStream)
 	case CmdGetFDesc:
 		ac.controlWorkload(cmd, rid, areq, nil, getFDesc)
 	case CmdRunSyncFunction:
@@ -199,6 +201,33 @@ func addIStream(ac *appServerCnc, _ uint64, areq any, _ []byte) (any, []byte) {
 	req, _ := areq.(*AddStreamReqMsg)
 	_, err := ac.cnc.AddIStream(req.StreamId)
 	rsp := &RespMsg{}
+	if err != nil {
+		rsp.Error = err.Error()
+	}
+	return rsp, nil
+}
+
+func closeStream(ac *appServerCnc, _ uint64, areq any, _ []byte) (any, []byte) {
+	var err error
+	req, _ := areq.(*CloseStreamReqMsg)
+	rsp := &RespMsg{}
+	if req.IsIn {
+		for fcId, fc := range ac.funcs {
+			for _, is := range fc.GetInStreams() {
+				if is.GetName() == req.StreamId {
+					err = errors.Join(err, fmt.Errorf("istream id %s owned by function %s", req.StreamId, fcId))
+				}
+			}
+		}
+	} else {
+		for fcId, fc := range ac.funcs {
+			for _, os := range fc.GetOutStreams() {
+				if os.GetName() == req.StreamId {
+					err = errors.Join(err, fmt.Errorf("ostream id %s owned by function %s", req.StreamId, fcId))
+				}
+			}
+		}
+	}
 	if err != nil {
 		rsp.Error = err.Error()
 	}

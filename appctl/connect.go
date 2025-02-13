@@ -24,6 +24,7 @@ type Connection interface {
 	GetCtrlStream() IOStream
 	AddIStream(id string) (IStream, error)
 	AddOStream(id string) (OStream, error)
+	CloseStream(id string, isIn bool) error
 	GetIStream(id string) IStream
 	GetOStream(id string) OStream
 	GetIStreams() map[string]IStream
@@ -167,6 +168,27 @@ func (c *connection) AddOStream(id string) (OStream, error) {
 	c.oss[id] = NewOStream(id, qst, written)
 	c.logger.Debug("new ostream created", "id", id, "qid", c.oss[id].Qid())
 	return c.oss[id], nil
+}
+
+func (c *connection) CloseStream(id string, isIn bool) error {
+	c.mux.Lock()
+	defer c.mux.Unlock()
+	if isIn {
+		is, ok := c.iss[id]
+		if !ok {
+			return fmt.Errorf("istream does not exist: %s", id)
+		}
+		_ = is
+		delete(c.iss, id)
+	} else {
+		os, ok := c.oss[id]
+		if !ok {
+			return fmt.Errorf("ostream does not exist: %s", id)
+		}
+		_ = os
+		delete(c.oss, id)
+	}
+	return nil
 }
 
 func (c *connection) GetIStream(id string) IStream {
