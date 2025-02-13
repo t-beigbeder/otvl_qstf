@@ -130,7 +130,7 @@ func factoryFor[T any]() any {
 	return &a
 }
 
-func SyncFuncDeclarer[TI any, TO any](fName string, wrp func(context.Context, *TI, error) TO) func(*FunctionCatalog) error {
+func JsonSyncFuncDeclarer[TI any, TO any](fName string, wrp func(context.Context, *TI, error) TO) func(*FunctionCatalog) error {
 	return func(cat *FunctionCatalog) error {
 		return cat.DeclareFunction(
 			FunctionDesc{

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"github.com/quic-go/quic-go"
 	"github.com/t-beigbeder/otvl_qstf/internal/netutils"
 	"io"
@@ -79,6 +80,133 @@ func templateForString() any {
 type Tin struct {
 	Name string `json:"name"`
 }
+
 type Tout struct {
 	Result string `json:"result"`
+}
+
+type TSW struct{}
+
+func (sw *TSW) Start(ctx context.Context) error {
+	cn := CurrentConnection(ctx)
+	cn.GetLogger().Debug("TSW Start", "cn", cn.GetId())
+	fc := CurrentFunction(ctx)
+	cn.GetLogger().Debug("TSW Start", "fc", fc.Options())
+	fc.GetInStreams()[0].Start()
+	return nil
+}
+
+func (sw *TSW) Wait(ctx context.Context) error {
+	cn := CurrentConnection(ctx)
+	cn.GetLogger().Debug("TSW Wait", "cn", cn.GetId())
+	fc := CurrentFunction(ctx)
+	cn.GetLogger().Debug("TSW Wait", "fc", fc.Options())
+	return nil
+}
+
+func GetTSWSthsRaw() *StreamHandlers {
+	return &StreamHandlers{
+		ihs: []IStreamHandler{
+			{
+				BSet: func(ctx context.Context, bytes []byte) error {
+					CurrentLogger(ctx).Debug("GetTSWSthsRaw BSet", "bytes", len(bytes))
+					vls := CurrentValues(ctx)
+					if vls == nil {
+						return errors.New("no values")
+					}
+					vls["bytes"] = bytes
+					oss := CurrentFunction(ctx).GetOutStreams()
+					oss[len(oss)-1].Start()
+					return nil
+				},
+			},
+		},
+		ohs: []OStreamHandler{
+			{
+				BGet: func(ctx context.Context) ([]byte, error) {
+					CurrentLogger(ctx).Debug("GetTSWSthsRaw BGet")
+					vls := CurrentValues(ctx)
+					if vls == nil {
+						return nil, errors.New("no values")
+					}
+					bytes, ok := vls["bytes"].([]byte)
+					if !ok {
+						return nil, errors.New("no bytes in values")
+					}
+					CurrentLogger(ctx).Debug("GetTSWSthsRaw BGet", "bytes", len(bytes))
+					rs := make([]byte, len(bytes)+len("response to "))
+					copy(rs[0:], "response to ")
+					copy(rs[len("response to "):], bytes)
+					return rs, nil
+				},
+			},
+		},
+	}
+}
+
+func getStdinDesc() []IStreamDesc {
+	return []IStreamDesc{
+		{
+			StreamDesc: StreamDesc{
+				Name:     "in",
+				Discrete: true,
+				MaxNb:    1,
+			},
+		},
+	}
+}
+
+func getStdoutDesc() []OStreamDesc {
+	return []OStreamDesc{
+		{
+			StreamDesc: StreamDesc{
+				Name:     "out",
+				Discrete: true,
+				MaxNb:    1,
+			},
+		},
+	}
+}
+
+func RawFuncDeclarer(fName string, terminable bool) func(*FunctionCatalog) error {
+	return func(cat *FunctionCatalog) error {
+		return cat.DeclareFunction(
+			FunctionDesc{
+				Name:       fName,
+				Terminable: terminable,
+				IStreams:   getStdinDesc(),
+				OStreams:   getStdoutDesc(),
+			},
+			nil, &TSW{}, GetTSWSthsRaw())
+	}
+}
+
+func JsonFuncDeclarer[TI any, TO any](fName string, terminable bool) func(*FunctionCatalog) error {
+	return func(cat *FunctionCatalog) error {
+		return cat.DeclareFunction(
+			FunctionDesc{
+				Name:       fName,
+				Terminable: terminable,
+				IStreams: []IStreamDesc{
+					{
+						StreamDesc: StreamDesc{
+							Name:     "in",
+							Discrete: true,
+							MaxNb:    1,
+						},
+					},
+				},
+				OStreams: []OStreamDesc{
+					{
+						StreamDesc: StreamDesc{
+							Name:     "out",
+							Discrete: true,
+							MaxNb:    1,
+						},
+					},
+				},
+			},
+			nil,
+			&TSW{}, GetTSWSthsRaw())
+	}
 }

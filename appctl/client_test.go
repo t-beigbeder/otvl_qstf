@@ -57,7 +57,7 @@ func TestGetFDesc(t *testing.T) {
 
 func TestNewAppClientRunSyncBase(t *testing.T) {
 	port, cancel, err := RunTestServer(func(as AppServer) {
-		_ = SyncFuncDeclarer[string, string]("TestNewAppClientRunSyncBase",
+		_ = JsonSyncFuncDeclarer[string, string]("TestNewAppClientRunSyncBase",
 			func(ctx context.Context, a *string, err error) string {
 				return fmt.Sprintf("TestNewAppClientRunSyncBase: %v", *a)
 			})(as.Catalog())
@@ -79,7 +79,7 @@ func TestNewAppClientRunSyncBase(t *testing.T) {
 
 func TestNewAppClientRunSyncTyped(t *testing.T) {
 	port, cancel, err := RunTestServer(func(as AppServer) {
-		_ = SyncFuncDeclarer[Tin, Tout]("TestNewAppClientRunSyncTyped",
+		_ = JsonSyncFuncDeclarer[Tin, Tout]("TestNewAppClientRunSyncTyped",
 			func(ctx context.Context, a *Tin, err error) Tout {
 				return Tout{Result: fmt.Sprintf("TestNewAppClientRunSyncTyped: %v", a.Name)}
 			})(as.Catalog())
@@ -101,7 +101,7 @@ func TestNewAppClientRunSyncTyped(t *testing.T) {
 
 func TestNewAppClientRunSyncReqLarge(t *testing.T) {
 	port, cancel, err := RunTestServer(func(as AppServer) {
-		_ = SyncFuncDeclarer[string, string]("TestNewAppClientRunSyncReqLarge",
+		_ = JsonSyncFuncDeclarer[string, string]("TestNewAppClientRunSyncReqLarge",
 			func(ctx context.Context, a *string, err error) string {
 				return fmt.Sprintf("TestNewAppClientRunSyncReqLarge: %v", *a)
 			})(as.Catalog())
@@ -130,7 +130,7 @@ func TestNewAppClientRunSyncReqLarge(t *testing.T) {
 
 func TestNewAppClientRunSyncRspLarge(t *testing.T) {
 	port, cancel, err := RunTestServer(func(as AppServer) {
-		_ = SyncFuncDeclarer[string, string]("TestNewAppClientRunSyncRspLarge",
+		_ = JsonSyncFuncDeclarer[string, string]("TestNewAppClientRunSyncRspLarge",
 			func(ctx context.Context, a *string, err error) string {
 				return fmt.Sprintf("TestNewAppClientRunSyncRspLarge: %v", *a)
 			})(as.Catalog())
@@ -160,7 +160,7 @@ func TestNewAppClientRunSyncRspLarge(t *testing.T) {
 
 func TestNewAppClientRunSyncSlow(t *testing.T) {
 	port, cancel, err := RunTestServer(func(as AppServer) {
-		_ = SyncFuncDeclarer[string, string]("TestNewAppClientRunSyncSlow",
+		_ = JsonSyncFuncDeclarer[string, string]("TestNewAppClientRunSyncSlow",
 			func(ctx context.Context, a *string, err error) string {
 				time.Sleep(20 * time.Millisecond)
 				return fmt.Sprintf("TestNewAppClientRunSyncSlow: %v", *a)
@@ -299,6 +299,61 @@ func getTestSwSthsRaw() *StreamHandlers {
 			},
 		},
 	}
+}
+
+func TestNewAppClientRunNTermFuncRaw(t *testing.T) {
+	port, cancel, err := RunTestServer(func(as AppServer) {
+		err := RawFuncDeclarer("TestNewAppClientRunNTermFuncRaw", false)(as.Catalog())
+		if err != nil {
+			t.Fatal(err)
+		}
+	})
+	require.NoError(t, err)
+	ac, err := NewAppClient(context.Background(), "localhost:"+port, GetLoggerFor("client"))
+	require.NoError(t, err)
+	require.NotNil(t, ac)
+	time.Sleep(10 * time.Millisecond)
+	os, err := ac.AddIStream("in")
+	require.NoError(t, err)
+	is, err := ac.GetOStream("out")
+	require.NoError(t, err)
+	_, _ = is, os
+	fc, err := ac.NewFunction("TestNewAppClientRunNTermFuncRaw", "")
+	require.NoError(t, err)
+	err = fc.AddOStream(os)
+	require.NoError(t, err)
+	err = fc.AddIStream(is)
+	require.NoError(t, err)
+
+	bgRes := ""
+	go func() {
+		js, err := toJsonBytes("hello world TestNewAppClientRunNTermFuncRaw")
+		if err != nil {
+			fmt.Fprintf(os2.Stderr, "toJsonBytes: %s\n", err)
+			return
+		}
+		_, err = os.Write(js)
+		if err != nil {
+			fmt.Fprintf(os2.Stderr, "os.Write: %s\n", err)
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+
+		bs, err := fromBytes(is)
+		if err != nil {
+			fmt.Fprintf(os2.Stderr, "fromBytes: %s\n", err)
+			return
+		}
+		bgRes = string(bs)
+		fmt.Fprintf(os2.Stderr, "fromBytes: %s\n", string(bs))
+
+	}()
+
+	err = fc.Run()
+	require.NoError(t, err)
+	time.Sleep(40 * time.Millisecond)
+	require.Equal(t, "response to \"hello world TestNewAppClientRunNTermFuncRaw\"", bgRes)
+	cancel()
 }
 
 func TestNewAppClientRunNTermFuncBase(t *testing.T) {
