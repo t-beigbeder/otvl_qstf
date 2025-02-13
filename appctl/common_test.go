@@ -11,7 +11,9 @@ import (
 	"os"
 )
 
-func RunTestServer(initializer func(AppServer)) (string, context.CancelFunc, error) {
+type TASInizer func(AppServer)
+
+func RunTestServer(initializer TASInizer) (string, context.CancelFunc, error) {
 	var as AppServer
 	port, cancel, err := netutils.RunTestServer(
 		QstfAlpn,
@@ -72,4 +74,11 @@ func fromJsonBytes(rr io.Reader, a any) error {
 func templateForString() any {
 	a := ""
 	return &a
+}
+
+type Tin struct {
+	Name string `json:"name"`
+}
+type Tout struct {
+	Result string `json:"result"`
 }

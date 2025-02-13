@@ -2,6 +2,7 @@ package appctl
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/t-beigbeder/otvl_qstf/stf"
 	"sync"
@@ -122,4 +123,32 @@ func (cat *FunctionCatalog) GetFunction(fName string) (*FunctionDesc, stf.StartW
 		return nil, nil, nil, nil, fmt.Errorf("function %s not found", fName)
 	}
 	return &fd, cat.sws[fName], cat.wrappedFns[fName], cat.sths[fName], nil
+}
+
+func factoryFor[T any]() any {
+	var a T
+	return &a
+}
+
+func SyncFuncDeclarer[TI any, TO any](fName string, wrp func(context.Context, *TI, error) TO) func(*FunctionCatalog) error {
+	return func(cat *FunctionCatalog) error {
+		return cat.DeclareFunction(
+			FunctionDesc{
+				Name:    fName,
+				Wrapper: WrapperDesc{InMarshaller: MarshalJson, OutMarshaller: MarshalJson},
+			},
+			&stf.WrappedFunction{
+				json.Marshal, json.Unmarshal,
+				factoryFor[TI], factoryFor[TO],
+				func(ctx context.Context, a any) any {
+					var err error
+					ta, ok := a.(*TI)
+					if !ok {
+						err = fmt.Errorf("%T is not %T", a, *new(TI))
+					}
+					return wrp(ctx, ta, err)
+				},
+			},
+			nil, nil)
+	}
 }
