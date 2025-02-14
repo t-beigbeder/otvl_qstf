@@ -32,7 +32,9 @@ type FcClient interface {
 	AddOStream(OStream) error
 	Run() error
 	Start() error
+	StartWith(im Marshaller, in any) error
 	Wait() error
+	WaitWith(om Marshaller, out any) error
 	Terminate() error
 	Close() error
 }
@@ -134,19 +136,23 @@ func (fc *fcClient) AddOStream(os OStream) error {
 	return nil
 }
 
-func (fc *fcClient) funcOper(oper string) error {
-	req := FuncOperReqMsg{Oper: oper, FuncId: fc.id}
+func (fc *fcClient) funcOper(oper string, im Marshaller, in any, om Marshaller, out any) error {
+	req := FuncOperReqMsg{Oper: oper, FuncId: fc.id, InMarsh: im, OutMarsh: om}
 	rsp := RespMsg{}
 	ac := fc.ac
 	rqDc, rid := ac.launchBg(
 		func(rid uint64, req, rqPl, rsp, rspPl any) error {
-			err := ac.sendCtrl(rid, CmdFuncOper, req, nil)
+			rqPlBs, err := MarshallPayload(im, rqPl)
+			if err != nil {
+				return err
+			}
+			err = ac.sendCtrl(rid, CmdFuncOper, req, rqPlBs)
 			if err != nil {
 				return err
 			}
 			return nil
 		},
-		&req, nil, &rsp, nil,
+		&req, in, &rsp, out,
 	)
 	defer ac.freeForReq(rid)
 	var rspData RspData
@@ -166,28 +172,43 @@ func (fc *fcClient) funcOper(oper string) error {
 	if arsp.Error != "" {
 		return errors.New(arsp.Error)
 	}
+	out2, err := UnmarshallPayload(om, rspData.Payload, out)
+	if err != nil {
+		return err
+	}
+	if out2 != nil {
+		out = out2
+	}
 	return nil
 
 }
 
 func (fc *fcClient) Run() error {
-	return fc.funcOper("run")
+	return fc.funcOper("run", MarshalNone, nil, MarshalNone, nil)
 }
 
 func (fc *fcClient) Start() error {
-	return fc.funcOper("start")
+	return fc.funcOper("start", MarshalNone, nil, MarshalNone, nil)
+}
+
+func (fc *fcClient) StartWith(im Marshaller, in any) error {
+	return fc.funcOper("start-pl", im, in, MarshalNone, nil)
 }
 
 func (fc *fcClient) Wait() error {
-	return fc.funcOper("wait")
+	return fc.funcOper("wait", MarshalNone, nil, MarshalNone, nil)
+}
+
+func (fc *fcClient) WaitWith(om Marshaller, out any) error {
+	return fc.funcOper("wait-pl", MarshalNone, nil, om, out)
 }
 
 func (fc *fcClient) Terminate() error {
-	return fc.funcOper("terminate")
+	return fc.funcOper("terminate", MarshalNone, nil, MarshalNone, nil)
 }
 
 func (fc *fcClient) Close() error {
-	return fc.funcOper("close")
+	return fc.funcOper("close", MarshalNone, nil, MarshalNone, nil)
 }
 
 type appClient struct {
@@ -542,7 +563,7 @@ func (ac *appClient) RunSyncFunction(fName string, id string, im Marshaller, in 
 	rsp := RunSyncFunctionRespMsg{}
 	rqDc, rid := ac.launchBg(
 		func(rid uint64, req, rqPl, rsp, rspPl any) error {
-			rqPlBs, err := MarshallToWrapped(im, rqPl)
+			rqPlBs, err := MarshallPayload(im, rqPl)
 			if err != nil {
 				return err
 			}
@@ -571,7 +592,7 @@ func (ac *appClient) RunSyncFunction(fName string, id string, im Marshaller, in 
 	if arsp.Error != "" {
 		return nil, errors.New(arsp.Error)
 	}
-	out2, err := UnmarshallFromWrapped(arsp.Desc.Wrapper.OutMarshaller, rspData.Payload, out)
+	out2, err := UnmarshallPayload(arsp.Desc.Wrapper.OutMarshaller, rspData.Payload, out)
 	if err != nil {
 		return nil, err
 	}

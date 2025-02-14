@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"github.com/quic-go/quic-go"
 	"github.com/t-beigbeder/otvl_qstf/internal/netutils"
+	"github.com/t-beigbeder/otvl_qstf/stf"
 	"io"
 	"log/slog"
 	"os"
@@ -96,6 +97,7 @@ func (sw *TSW) Start(ctx context.Context) error {
 	cn.GetLogger().Debug("TSW Start", "cn", cn.GetId())
 	fc := CurrentFunction(ctx)
 	cn.GetLogger().Debug("TSW Start", "fc", fc.Options())
+	cn.GetLogger().Debug("TSW Start", "fc", CurrentValues(ctx))
 	fc.GetInStreams()[0].Start()
 	return nil
 }
@@ -105,6 +107,13 @@ func (sw *TSW) Wait(ctx context.Context) error {
 	cn.GetLogger().Debug("TSW Wait", "cn", cn.GetId())
 	fc := CurrentFunction(ctx)
 	cn.GetLogger().Debug("TSW Wait", "fc", fc.Options())
+	ainV, ok := CurrentValues(ctx)["in-pl"]
+	if ok {
+		inV, ok := ainV.(*Tin)
+		if ok {
+			CurrentValues(ctx)["out-pl"] = &Tout{Result: "result for " + inV.Name}
+		}
+	}
 	return nil
 }
 
@@ -220,8 +229,12 @@ func RawFuncDeclarer(fName string, terminable bool) func(*FunctionCatalog) error
 				Terminable: terminable,
 				IStreams:   getStdinDesc(),
 				OStreams:   getStdoutDesc(),
+				Wrapper:    WrapperDesc{InMarshaller: MarshalJson, OutMarshaller: MarshalJson},
 			},
-			nil, &TSW{}, GetTSWSthsRaw())
+			&stf.WrappedFunction{
+				InputTemplate:  FactoryFor[Tin],
+				OutputTemplate: FactoryFor[Tout],
+			}, &TSW{}, GetTSWSthsRaw())
 	}
 }
 

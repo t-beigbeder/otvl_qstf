@@ -42,6 +42,7 @@ type Function interface {
 	Close()
 	State() FunctionState
 	Options() FcOptions
+	Ctx() context.Context
 	Error() error
 }
 
@@ -281,6 +282,10 @@ func (fc *function) State() FunctionState {
 
 func (fc *function) Options() FcOptions {
 	return FcOptions{Id: fc.id, Terminable: fc.terminable}
+}
+
+func (fc *function) Ctx() context.Context {
+	return fc.ctx
 }
 
 func (fc *function) Error() error {

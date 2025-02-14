@@ -7,7 +7,7 @@ import (
 	"log/slog"
 )
 
-func (ac *appServerCnc) newFunction(id string, fc stf.Function, fd *FunctionDesc, sths *StreamHandlers) error {
+func (ac *appServerCnc) newFunction(id string, fc stf.Function, fd *FunctionDesc, sths *StreamHandlers, wf *stf.WrappedFunction) error {
 	ac.mux.Lock()
 	defer ac.mux.Unlock()
 	_, ok := ac.funcs[id]
@@ -18,6 +18,7 @@ func (ac *appServerCnc) newFunction(id string, fc stf.Function, fd *FunctionDesc
 	ac.funcs[id] = fc
 	ac.fds[id] = fd
 	ac.sthss[id] = sths
+	ac.wf[id] = wf
 	return nil
 }
 
@@ -39,11 +40,12 @@ func (ac *appServerCnc) delFunction(id string) error {
 
 }
 
-func (ac *appServerCnc) getFunction(id string) (stf.Function, *FunctionDesc, *StreamHandlers) {
+func (ac *appServerCnc) getFunction(id string) (stf.Function, *FunctionDesc, *StreamHandlers, *stf.WrappedFunction) {
 	fc, _ := ac.funcs[id]
 	fd, _ := ac.fds[id]
 	sths, _ := ac.sthss[id]
-	return fc, fd, sths
+	wf, _ := ac.wf[id]
+	return fc, fd, sths, wf
 }
 
 func CurrentConnection(ctx context.Context) Connection {

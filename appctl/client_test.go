@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-func TestNewAppClientBasic(t *testing.T) {
+func TestBasic(t *testing.T) {
 	port, cancel, err := RunTestServer(nil)
 	require.NoError(t, err)
 	ac, err := NewAppClient(context.Background(), "localhost:"+port, GetLoggerFor("client"))
@@ -54,11 +54,11 @@ func TestGetFDesc(t *testing.T) {
 	time.Sleep(20 * time.Millisecond)
 }
 
-func TestNewAppClientRunSyncBase(t *testing.T) {
+func TestRunSyncBase(t *testing.T) {
 	port, cancel, err := RunTestServer(func(as AppServer) {
-		_ = JsonSyncFuncDeclarer[string, string]("TestNewAppClientRunSyncBase",
+		_ = JsonSyncFuncDeclarer[string, string]("TestRunSyncBase",
 			func(ctx context.Context, a *string, err error) string {
-				return fmt.Sprintf("TestNewAppClientRunSyncBase: %v", *a)
+				return fmt.Sprintf("TestRunSyncBase: %v", *a)
 			})(as.Catalog())
 	})
 	require.NoError(t, err)
@@ -68,19 +68,19 @@ func TestNewAppClientRunSyncBase(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 	for i := 0; i < 5; i++ {
 		var sOut string
-		_, err = ac.RunSyncFunction("TestNewAppClientRunSyncBase", "", MarshalJson, fmt.Sprintf("#%03d", i), &sOut)
+		_, err = ac.RunSyncFunction("TestRunSyncBase", "", MarshalJson, fmt.Sprintf("#%03d", i), &sOut)
 		require.NoError(t, err)
-		require.Equal(t, fmt.Sprintf("TestNewAppClientRunSyncBase: #%03d", i), sOut)
+		require.Equal(t, fmt.Sprintf("TestRunSyncBase: #%03d", i), sOut)
 	}
 	cancel()
 	time.Sleep(20 * time.Millisecond)
 }
 
-func TestNewAppClientRunSyncTyped(t *testing.T) {
+func TestRunSyncTyped(t *testing.T) {
 	port, cancel, err := RunTestServer(func(as AppServer) {
-		_ = JsonSyncFuncDeclarer[Tin, Tout]("TestNewAppClientRunSyncTyped",
+		_ = JsonSyncFuncDeclarer[Tin, Tout]("TestRunSyncTyped",
 			func(ctx context.Context, a *Tin, err error) Tout {
-				return Tout{Result: fmt.Sprintf("TestNewAppClientRunSyncTyped: %v", a.Name)}
+				return Tout{Result: fmt.Sprintf("TestRunSyncTyped: %v", a.Name)}
 			})(as.Catalog())
 	})
 	require.NoError(t, err)
@@ -90,19 +90,19 @@ func TestNewAppClientRunSyncTyped(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 	for i := 0; i < 5; i++ {
 		var sOut Tout
-		_, err = ac.RunSyncFunction("TestNewAppClientRunSyncTyped", "", MarshalJson, Tin{fmt.Sprintf("#%03d", i)}, &sOut)
+		_, err = ac.RunSyncFunction("TestRunSyncTyped", "", MarshalJson, Tin{fmt.Sprintf("#%03d", i)}, &sOut)
 		require.NoError(t, err)
-		require.Equal(t, fmt.Sprintf("TestNewAppClientRunSyncTyped: #%03d", i), sOut.Result)
+		require.Equal(t, fmt.Sprintf("TestRunSyncTyped: #%03d", i), sOut.Result)
 	}
 	cancel()
 	time.Sleep(20 * time.Millisecond)
 }
 
-func TestNewAppClientRunSyncReqLarge(t *testing.T) {
+func TestRunSyncReqLarge(t *testing.T) {
 	port, cancel, err := RunTestServer(func(as AppServer) {
-		_ = JsonSyncFuncDeclarer[string, string]("TestNewAppClientRunSyncReqLarge",
+		_ = JsonSyncFuncDeclarer[string, string]("TestRunSyncReqLarge",
 			func(ctx context.Context, a *string, err error) string {
-				return fmt.Sprintf("TestNewAppClientRunSyncReqLarge: %v", *a)
+				return fmt.Sprintf("TestRunSyncReqLarge: %v", *a)
 			})(as.Catalog())
 	})
 	require.NoError(t, err)
@@ -120,18 +120,18 @@ func TestNewAppClientRunSyncReqLarge(t *testing.T) {
 	}
 	var sOut string
 	in := genLargeString()
-	_, err = ac.RunSyncFunction("TestNewAppClientRunSyncReqLarge", "", MarshalJson, in, &sOut)
+	_, err = ac.RunSyncFunction("TestRunSyncReqLarge", "", MarshalJson, in, &sOut)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "payload too large")
 	cancel()
 	time.Sleep(20 * time.Millisecond)
 }
 
-func TestNewAppClientRunSyncRspLarge(t *testing.T) {
+func TestRunSyncRspLarge(t *testing.T) {
 	port, cancel, err := RunTestServer(func(as AppServer) {
-		_ = JsonSyncFuncDeclarer[string, string]("TestNewAppClientRunSyncRspLarge",
+		_ = JsonSyncFuncDeclarer[string, string]("TestRunSyncRspLarge",
 			func(ctx context.Context, a *string, err error) string {
-				return fmt.Sprintf("TestNewAppClientRunSyncRspLarge: %v", *a)
+				return fmt.Sprintf("TestRunSyncRspLarge: %v", *a)
 			})(as.Catalog())
 	})
 	require.NoError(t, err)
@@ -143,26 +143,26 @@ func TestNewAppClientRunSyncRspLarge(t *testing.T) {
 	genNotSoLargeString := func() string {
 		res := ""
 		for i := 0; ; i++ {
-			s := fmt.Sprintf("TestNewAppClientRunSyncRspLarge #%03d ", i)
+			s := fmt.Sprintf("TestRunSyncRspLarge #%03d ", i)
 			if len(res)+len(s) >= MaxInPlSize {
 				return res
 			}
 			res += s
 		}
 	}
-	_, err = ac.RunSyncFunction("TestNewAppClientRunSyncRspLarge", "", MarshalJson, genNotSoLargeString(), &sOut)
+	_, err = ac.RunSyncFunction("TestRunSyncRspLarge", "", MarshalJson, genNotSoLargeString(), &sOut)
 	require.Error(t, err)
 	time.Sleep(20 * time.Millisecond)
 	cancel()
 	time.Sleep(20 * time.Millisecond)
 }
 
-func TestNewAppClientRunSyncSlow(t *testing.T) {
+func TestRunSyncSlow(t *testing.T) {
 	port, cancel, err := RunTestServer(func(as AppServer) {
-		_ = JsonSyncFuncDeclarer[string, string]("TestNewAppClientRunSyncSlow",
+		_ = JsonSyncFuncDeclarer[string, string]("TestRunSyncSlow",
 			func(ctx context.Context, a *string, err error) string {
 				time.Sleep(20 * time.Millisecond)
-				return fmt.Sprintf("TestNewAppClientRunSyncSlow: %v", *a)
+				return fmt.Sprintf("TestRunSyncSlow: %v", *a)
 			})(as.Catalog())
 	})
 	require.NoError(t, err)
@@ -171,32 +171,11 @@ func TestNewAppClientRunSyncSlow(t *testing.T) {
 	require.NotNil(t, ac)
 	time.Sleep(10 * time.Millisecond)
 	var sOut string
-	_, err = ac.RunSyncFunction("TestNewAppClientRunSyncSlow", "", MarshalJson, "#000", &sOut)
+	_, err = ac.RunSyncFunction("TestRunSyncSlow", "", MarshalJson, "#000", &sOut)
 	require.NoError(t, err)
-	require.Equal(t, "TestNewAppClientRunSyncSlow: #000", sOut)
+	require.Equal(t, "TestRunSyncSlow: #000", sOut)
 	cancel()
 	time.Sleep(20 * time.Millisecond)
-}
-
-type testSw struct {
-	in any
-}
-
-func (sw *testSw) Start(ctx context.Context) error {
-	cn := CurrentConnection(ctx)
-	cn.GetLogger().Debug("testSw Start", "cn", cn.GetId())
-	fc := CurrentFunction(ctx)
-	cn.GetLogger().Debug("testSw Start", "fc", fc.Options())
-	fc.GetInStreams()[0].Start()
-	return nil
-}
-
-func (sw *testSw) Wait(ctx context.Context) error {
-	cn := CurrentConnection(ctx)
-	cn.GetLogger().Debug("testSw Wait", "cn", cn.GetId())
-	fc := CurrentFunction(ctx)
-	cn.GetLogger().Debug("testSw Wait", "fc", fc.Options())
-	return nil
 }
 
 func getTestSwSthsRaw() *StreamHandlers {
@@ -236,7 +215,7 @@ func getTestSwSthsRaw() *StreamHandlers {
 	}
 }
 
-func TestNewAppClientRunNTermFuncRaw(t *testing.T) {
+func TestRunNTermFuncRaw(t *testing.T) {
 	port, cancel, err := RunTestServer(func(as AppServer) {
 		err := RawFuncDeclarer(t.Name(), false)(as.Catalog())
 		if err != nil {
@@ -252,11 +231,11 @@ func TestNewAppClientRunNTermFuncRaw(t *testing.T) {
 	err = fc.Run()
 	require.NoError(t, err)
 	time.Sleep(40 * time.Millisecond)
-	require.Equal(t, "response to hello world TestNewAppClientRunNTermFuncRaw", bgRes)
+	require.Equal(t, "response to hello world TestRunNTermFuncRaw", bgRes)
 	cancel()
 }
 
-func TestNewAppClientRunTermFunc(t *testing.T) {
+func TestRunTermFunc(t *testing.T) {
 	port, cancel, err := RunTestServer(func(as AppServer) {
 		err := JsonFuncDeclarer[string, string](t.Name(), true)(as.Catalog())
 		if err != nil {
@@ -284,7 +263,7 @@ func TestNewAppClientRunTermFunc(t *testing.T) {
 	time.Sleep(20 * time.Millisecond)
 }
 
-func TestNewAppClientSWTermFunc(t *testing.T) {
+func TestSWTermFunc(t *testing.T) {
 	port, cancel, err := RunTestServer(func(as AppServer) {
 		err := JsonFuncDeclarer[string, string](t.Name(), true)(as.Catalog())
 		if err != nil {
@@ -315,7 +294,7 @@ func TestNewAppClientSWTermFunc(t *testing.T) {
 	time.Sleep(20 * time.Millisecond)
 }
 
-func TestNewAppClientSWCloseFunc(t *testing.T) {
+func TestSWCloseFunc(t *testing.T) {
 	port, cancel, err := RunTestServer(func(as AppServer) {
 		err := JsonFuncDeclarer[string, string](t.Name(), true)(as.Catalog())
 		if err != nil {
@@ -342,7 +321,7 @@ func TestNewAppClientSWCloseFunc(t *testing.T) {
 	time.Sleep(20 * time.Millisecond)
 }
 
-func TestNewAppClientSWCloseClient(t *testing.T) {
+func TestSWCloseClient(t *testing.T) {
 	port, _, err := RunTestServer(func(as AppServer) {
 		err := JsonFuncDeclarer[string, string](t.Name(), true)(as.Catalog())
 		if err != nil {
@@ -368,7 +347,7 @@ func TestNewAppClientSWCloseClient(t *testing.T) {
 	time.Sleep(20 * time.Millisecond)
 }
 
-func TestNewAppClientCloseStream(t *testing.T) {
+func TestCloseStream(t *testing.T) {
 	port, _, err := RunTestServer(func(as AppServer) {
 		err := JsonFuncDeclarer[string, string](t.Name(), true)(as.Catalog())
 		if err != nil {
@@ -405,4 +384,28 @@ func TestNewAppClientCloseStream(t *testing.T) {
 	require.NoError(t, err)
 	err = ac.CloseOStream(os.Id())
 	require.NoError(t, err)
+}
+
+func TestSWFuncRawPayload(t *testing.T) {
+	port, cancel, err := RunTestServer(func(as AppServer) {
+		err := RawFuncDeclarer(t.Name(), false)(as.Catalog())
+		if err != nil {
+			t.Fatal(err)
+		}
+	})
+	require.NoError(t, err)
+	_, fc, is, os, err := NewAppClientWithFuncStdio(port, t.Name())
+
+	bgRes := ""
+	go BgStdInOut(is, os, t.Name(), false, &bgRes)
+
+	err = fc.StartWith(MarshalJson, &Tin{"TestSWFuncRawPayload"})
+	require.NoError(t, err)
+	vout := Tout{}
+	err = fc.WaitWith(MarshalJson, &vout)
+	require.NoError(t, err)
+	require.Equal(t, "result for "+t.Name(), vout.Result)
+	time.Sleep(40 * time.Millisecond)
+	require.Equal(t, "response to hello world TestSWFuncRawPayload", bgRes)
+	cancel()
 }

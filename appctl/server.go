@@ -31,6 +31,7 @@ type appServerCnc struct {
 	funcs  map[string]stf.Function
 	fds    map[string]*FunctionDesc
 	sthss  map[string]*StreamHandlers
+	wf     map[string]*stf.WrappedFunction
 }
 
 func (ac *appServerCnc) recvCtrl() (rid uint64, cmd string, req any, payload []byte, err error) {
@@ -82,7 +83,7 @@ func (ac *appServerCnc) Handle() error {
 	if err != nil {
 		return err
 	}
-	ac.GetLogger().Info("Received request", "cmd", cmd, "req", areq, "rid", rid)
+	ac.GetLogger().Info("Received request", "cmd", cmd, "req", areq, "rid", rid, "payload", len(payload))
 	switch cmd {
 	case CmdAddOStream:
 		ac.controlWorkload(cmd, rid, areq, nil, getOStream)
@@ -101,7 +102,7 @@ func (ac *appServerCnc) Handle() error {
 	case CmdFuncAddOStream:
 		ac.controlWorkload(cmd, rid, areq, nil, funcAddOStream)
 	case CmdFuncOper:
-		ac.controlWorkload(cmd, rid, areq, nil, funcOper)
+		ac.controlWorkload(cmd, rid, areq, payload, funcOper)
 	default:
 		ac.GetLogger().Error("Unknown command", "cmd", cmd)
 		return ac.respError(rid, fmt.Errorf("unknown command: %s", cmd))
@@ -277,7 +278,7 @@ func runSyncFunction(ac *appServerCnc, _ uint64, areq any, rqPl []byte) (arsp an
 		return
 	}
 	values["fc"] = fc
-	err = ac.newFunction(req.FuncId, fc, fd, nil)
+	err = ac.newFunction(req.FuncId, fc, fd, nil, nil)
 	if err != nil {
 		rsp.Error = err.Error()
 		return
@@ -308,7 +309,7 @@ func newFunction(ac *appServerCnc, _ uint64, areq any, _ []byte) (arsp any, _ []
 		rsp.Error = err.Error()
 		return
 	}
-	if wf != nil {
+	if wf != nil && wf.Wrapped != nil {
 		rsp.Error = fmt.Sprintf("Function %s is wrapped and must be run with RunSyncFunction", fd.Name)
 		return
 	}
@@ -328,7 +329,7 @@ func newFunction(ac *appServerCnc, _ uint64, areq any, _ []byte) (arsp any, _ []
 		return
 	}
 	values["fc"] = fc
-	err = ac.newFunction(req.FuncId, fc, fd, sths)
+	err = ac.newFunction(req.FuncId, fc, fd, sths, wf)
 
 	rsp.Desc = *fd
 	return rsp, nil
@@ -338,7 +339,7 @@ func funcAddIStream(ac *appServerCnc, _ uint64, areq any, _ []byte) (arsp any, _
 	req, _ := areq.(*FuncAddStreamReqMsg)
 	rsp := &RespMsg{}
 	arsp = rsp
-	fc, fd, sths := ac.getFunction(req.FuncId)
+	fc, fd, sths, _ := ac.getFunction(req.FuncId)
 	if fc == nil || fd == nil {
 		rsp.Error = fmt.Sprintf("Function %s does not exist", req.FuncId)
 		return
@@ -375,7 +376,7 @@ func funcAddOStream(ac *appServerCnc, _ uint64, areq any, _ []byte) (arsp any, _
 	req, _ := areq.(*FuncAddStreamReqMsg)
 	rsp := &RespMsg{}
 	arsp = rsp
-	fc, fd, sths := ac.getFunction(req.FuncId)
+	fc, fd, sths, _ := ac.getFunction(req.FuncId)
 	if fc == nil || fd == nil {
 		rsp.Error = fmt.Sprintf("Function %s does not exist", req.FuncId)
 		return
@@ -408,11 +409,11 @@ func funcAddOStream(ac *appServerCnc, _ uint64, areq any, _ []byte) (arsp any, _
 	return rsp, nil
 }
 
-func funcOper(ac *appServerCnc, _ uint64, areq any, _ []byte) (arsp any, _ []byte) {
+func funcOper(ac *appServerCnc, _ uint64, areq any, rqPl []byte) (arsp any, rsPl []byte) {
 	req, _ := areq.(*FuncOperReqMsg)
 	rsp := &RespMsg{}
 	arsp = rsp
-	fc, fd, _ := ac.getFunction(req.FuncId)
+	fc, fd, _, wf := ac.getFunction(req.FuncId)
 	if fc == nil || fd == nil {
 		rsp.Error = fmt.Sprintf("Function %s does not exist", req.FuncId)
 		return
@@ -429,10 +430,33 @@ func funcOper(ac *appServerCnc, _ uint64, areq any, _ []byte) (arsp any, _ []byt
 	switch req.Oper {
 	case "run":
 		err = fc.Run()
-	case "start":
+	case "start", "start-pl":
+		if len(rqPl) != 0 {
+			var inpl any
+			if wf != nil && wf.InputTemplate != nil {
+				inpl = wf.InputTemplate()
+			} else {
+				inpl = make(map[any]any)
+			}
+			inpl2, err := UnmarshallPayload(req.InMarsh, rqPl, &inpl)
+			if err != nil {
+				break
+			}
+			if inpl2 != nil {
+				inpl = inpl2
+			}
+			CurrentValues(fc.Ctx())["in-pl"] = inpl
+		}
 		err = fc.Start()
-	case "wait":
+	case "wait", "wait-pl":
 		err = fc.Wait()
+		if err != nil {
+			break
+		}
+		outpl, _ := CurrentValues(fc.Ctx())["out-pl"]
+		if outpl != nil {
+			rsPl, err = MarshallPayload(req.OutMarsh, outpl)
+		}
 	case "terminate":
 		fc.Terminate()
 	case "close":
@@ -444,7 +468,7 @@ func funcOper(ac *appServerCnc, _ uint64, areq any, _ []byte) (arsp any, _ []byt
 		rsp.Error = err.Error()
 		return
 	}
-	return rsp, nil
+	return rsp, rsPl
 }
 
 func (ac *appServerCnc) GetLogger() *slog.Logger {
@@ -489,6 +513,7 @@ func (as *appServer) NewCnc(qc quic.Connection) {
 		funcs:  make(map[string]stf.Function),
 		fds:    make(map[string]*FunctionDesc),
 		sthss:  make(map[string]*StreamHandlers),
+		wf:     make(map[string]*stf.WrappedFunction),
 	}
 	as.cncs[id] = ac
 

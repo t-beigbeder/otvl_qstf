@@ -151,8 +151,10 @@ type FuncAddStreamReqMsg struct {
 }
 
 type FuncOperReqMsg struct {
-	Oper   string `json:"oper"`
-	FuncId string `json:"funcId"`
+	Oper     string     `json:"oper"`
+	FuncId   string     `json:"funcId"`
+	InMarsh  Marshaller `json:"inMarsh"`
+	OutMarsh Marshaller `json:"outMarsh"`
 }
 
 type RespMsg struct {
@@ -183,13 +185,16 @@ func GetReqDesc(cmd string) *ReqDesc {
 	return &rd
 }
 
-func MarshallToWrapped(mt Marshaller, rqPl any) ([]byte, error) {
+func MarshallPayload(mt Marshaller, pl any) ([]byte, error) {
+	if pl == nil {
+		return nil, nil
+	}
 	var ms func(any) ([]byte, error)
 	switch mt {
 	case MarshalNone:
-		bs, ok := rqPl.([]byte)
+		bs, ok := pl.([]byte)
 		if !ok {
-			return nil, fmt.Errorf("MarshallToWrapped: expected []byte, got %T", rqPl)
+			return nil, fmt.Errorf("MarshallPayload: expected []byte, got %T", pl)
 		}
 		return bs, nil
 	case MarshalJson:
@@ -197,12 +202,15 @@ func MarshallToWrapped(mt Marshaller, rqPl any) ([]byte, error) {
 	case MarshalYaml:
 		ms = yaml.Marshal
 	default:
-		return nil, fmt.Errorf("MarshallToWrapped: unsupported marshaller: %v", mt)
+		return nil, fmt.Errorf("MarshallPayload: unsupported marshaller: %v", mt)
 	}
-	return ms(rqPl)
+	return ms(pl)
 }
 
-func UnmarshallFromWrapped(mt Marshaller, rsPl any, v any) (any, error) {
+func UnmarshallPayload(mt Marshaller, pl any, v any) (any, error) {
+	if pl == nil {
+		return nil, nil
+	}
 	var ums func(data []byte, v any) error
 	switch mt {
 	case MarshalNone:
@@ -212,11 +220,11 @@ func UnmarshallFromWrapped(mt Marshaller, rsPl any, v any) (any, error) {
 	case MarshalYaml:
 		ums = yaml.Unmarshal
 	default:
-		return nil, fmt.Errorf("UnmarshallFromWrapped: unsupported marshaller: %v", mt)
+		return nil, fmt.Errorf("UnmarshallPayload: unsupported marshaller: %v", mt)
 	}
-	plbs, ok := rsPl.([]byte)
+	plbs, ok := pl.([]byte)
 	if !ok {
-		return nil, fmt.Errorf("unexpected output payload type: %T", rsPl)
+		return nil, fmt.Errorf("unexpected output payload type: %T", pl)
 	}
 	err := ums(plbs, v)
 	if err != nil {
