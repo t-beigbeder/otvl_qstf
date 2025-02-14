@@ -174,18 +174,14 @@ func (c *connection) CloseStream(id string, isIn bool) error {
 	c.mux.Lock()
 	defer c.mux.Unlock()
 	if isIn {
-		is, ok := c.iss[id]
-		if !ok {
+		if c.GetIStream(id) == nil {
 			return fmt.Errorf("istream does not exist: %s", id)
 		}
-		_ = is
 		delete(c.iss, id)
 	} else {
-		os, ok := c.oss[id]
-		if !ok {
+		if c.GetOStream(id) == nil {
 			return fmt.Errorf("ostream does not exist: %s", id)
 		}
-		_ = os
 		delete(c.oss, id)
 	}
 	return nil

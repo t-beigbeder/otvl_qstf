@@ -13,6 +13,18 @@ import (
 	"sync"
 )
 
+type AppClient interface {
+	AddIStream(id string) (OStream, error)
+	GetOStream(id string) (IStream, error)
+	CloseIStream(id string) error
+	CloseOStream(id string) error
+	GetFDesc(fName string) (*FunctionDesc, error)
+	RunSyncFunction(fName string, id string, im Marshaller, in any, out any) (FcClient, error)
+	NewFunction(fName string, id string) (FcClient, error)
+	GetFunction(id string) FcClient
+	Close()
+}
+
 type FcClient interface {
 	GetDesc() FunctionDesc
 	GetId() string
@@ -176,18 +188,6 @@ func (fc *fcClient) Terminate() error {
 
 func (fc *fcClient) Close() error {
 	return fc.funcOper("close")
-}
-
-type AppClient interface {
-	AddIStream(id string) (OStream, error)
-	GetOStream(id string) (IStream, error)
-	CloseIStream(id string) error
-	CloseOStream(id string) error
-	GetFDesc(fName string) (*FunctionDesc, error)
-	RunSyncFunction(fName string, id string, im Marshaller, in any, out any) (FcClient, error)
-	NewFunction(fName string, id string) (FcClient, error)
-	GetFunction(id string) FcClient
-	Close()
 }
 
 type appClient struct {
@@ -468,10 +468,6 @@ func (ac *appClient) closeStream(id string, isIn bool) error {
 			if err != nil {
 				return err
 			}
-			err = ac.cnc.CloseStream(id, isIn)
-			if err != nil {
-				return err
-			}
 			return nil
 		},
 		&req, nil, &rsp, nil,
@@ -488,15 +484,25 @@ func (ac *appClient) closeStream(id string, isIn bool) error {
 	if arsp.Error != "" {
 		return errors.New(arsp.Error)
 	}
+	err := ac.cnc.CloseStream(id, isIn)
+	if err != nil {
+		return err
+	}
 	return nil
 
 }
 
 func (ac *appClient) CloseIStream(id string) error {
+	if ac.cnc.GetIStream(id) == nil {
+		return fmt.Errorf("istream does not exist: %s", id)
+	}
 	return ac.closeStream(id, true)
 }
 
 func (ac *appClient) CloseOStream(id string) error {
+	if ac.cnc.GetOStream(id) == nil {
+		return fmt.Errorf("ostream does not exist: %s", id)
+	}
 	return ac.closeStream(id, false)
 }
 
