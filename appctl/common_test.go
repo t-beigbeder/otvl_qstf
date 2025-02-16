@@ -257,7 +257,6 @@ func NewAppClientWithFuncStdio(port string, fName string) (AppClient, FcClient, 
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
-	time.Sleep(10 * time.Millisecond)
 	os, err := ac.AddIStream("in")
 	if err != nil {
 		return nil, nil, nil, nil, err

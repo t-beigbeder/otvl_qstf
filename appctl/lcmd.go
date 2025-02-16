@@ -47,7 +47,7 @@ func (sw *lcStartWait) Start(ctx context.Context) error {
 func (sw *lcStartWait) Wait(ctx context.Context) error {
 	err := sw.cmd.Wait()
 	if err != nil {
-		ee := exec.ExitError{}
+		ee := &exec.ExitError{}
 		if errors.As(err, &ee) {
 			CurrentValues(ctx)["out-pl"] = &CommandExitStatus{ExitCode: ee.ExitCode()}
 			return nil
@@ -75,6 +75,10 @@ func LocalCommandFuncDeclarer(fName, isName, osName, esName string) func(*Functi
 				InputTemplate:  FactoryFor[stf.CommandSpec],
 				OutputTemplate: FactoryFor[CommandExitStatus],
 			},
-			&lcStartWait{}, nil)
+			&lcStartWait{},
+			&StreamHandlers{
+				ihs: []IStreamHandler{{}},
+				ohs: []OStreamHandler{{}, {}},
+			})
 	}
 }

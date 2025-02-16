@@ -97,10 +97,12 @@ func (c *connection) makeQStream(id string, isIn bool) (qst quic.Stream, read in
 		return
 	}
 	if accept {
+		c.logger.Debug("makeQStream: accepting", "id", id)
 		if qst, err = c.qc.AcceptStream(c.ctx); err != nil {
 			err = fmt.Errorf("error accepting %s stream: %v", id, err)
 			return
 		}
+		c.logger.Debug("makeQStream: reading", "id", id)
 		_, err = io.ReadFull(qst, make([]byte, 4))
 		if err != nil {
 			err = fmt.Errorf("error reading %s stream: %v", id, err)
@@ -109,10 +111,13 @@ func (c *connection) makeQStream(id string, isIn bool) (qst quic.Stream, read in
 		c.GetLogger().Info("stream accepted", "id", id)
 		read = 4
 	} else {
+		c.logger.Debug("makeQStream: opening", "id", id)
 		if qst, err = c.qc.OpenStream(); err != nil {
+			c.logger.Debug("makeQStream: open error", "id", id, "err", err)
 			err = fmt.Errorf("error opening %s stream: %v", id, err)
 			return
 		}
+		c.logger.Debug("makeQStream: writing", "id", id)
 		_, err = qst.Write(make([]byte, 4))
 		if err != nil {
 			err = fmt.Errorf("error writing %s stream: %v", id, err)
@@ -139,8 +144,10 @@ func (c *connection) GetCtrlStream() IOStream {
 }
 
 func (c *connection) AddIStream(id string) (IStream, error) {
+	c.logger.Debug("new istream creating", "id", id)
 	c.mux.Lock()
 	defer c.mux.Unlock()
+	c.logger.Debug("new istream creating locked", "id", id)
 	_, ok := c.iss[id]
 	if ok {
 		return nil, fmt.Errorf("istream already exists: %s", id)
@@ -155,8 +162,10 @@ func (c *connection) AddIStream(id string) (IStream, error) {
 }
 
 func (c *connection) AddOStream(id string) (OStream, error) {
+	c.logger.Debug("new ostream creating", "id", id)
 	c.mux.Lock()
 	defer c.mux.Unlock()
+	c.logger.Debug("new ostream creating locked", "id", id)
 	_, ok := c.oss[id]
 	if ok {
 		return nil, fmt.Errorf("ostream already exists: %s", id)

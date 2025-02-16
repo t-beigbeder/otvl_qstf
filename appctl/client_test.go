@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/stretchr/testify/require"
 	"github.com/t-beigbeder/otvl_qstf/stf"
+	"os"
 	"testing"
 	"time"
 )
@@ -407,5 +408,50 @@ func TestSWFuncRawPayload(t *testing.T) {
 	require.Equal(t, "result for "+t.Name(), vout.Result)
 	time.Sleep(40 * time.Millisecond)
 	require.Equal(t, "response to hello world TestSWFuncRawPayload", bgRes)
+	cancel()
+}
+
+func TestNewLocalCommandClient(t *testing.T) {
+	port, cancel, err := RunTestServer(func(as AppServer) {
+		err := LocalCommandFuncDeclarer(t.Name(), "in", "out", "err")(as.Catalog())
+		if err != nil {
+			t.Fatal(err)
+		}
+	})
+	require.NoError(t, err)
+	ac, err := NewAppClient(context.Background(), "localhost:"+port, GetLoggerFor("client"))
+	require.NoError(t, err)
+	fc, in, out, ser, err := NewLocalCommandClient(ac, LocalCommandClientSpec{t.Name(), "", "in", "out", "err"})
+	require.NoError(t, err)
+	var (
+		sout string
+		serr string
+	)
+	go func() {
+		in.Write(toBytes([]byte("hello world " + t.Name())))
+		bs, err := fromBytes(out)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "fromBytes: %s\n", err)
+			return
+		}
+		bs, err = fromBytes(ser)
+		sout = string(bs)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "fromBytes: %s\n", err)
+			return
+		}
+		serr = string(bs)
+	}()
+	err = fc.StartWith(MarshalJson, &stf.CommandSpec{
+		Cmd:  "ls",
+		Args: []string{"-l"},
+		Env:  nil,
+		Dir:  "/tmp",
+	})
+	require.NoError(t, err)
+	es := CommandExitStatus{}
+	err = fc.WaitWith(MarshalJson, &es)
+	require.NoError(t, err)
+	_, _ = sout, serr
 	cancel()
 }
