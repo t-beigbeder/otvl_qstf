@@ -84,20 +84,20 @@ func (c *connection) makeQStream(id string, isIn bool) (qst quic.Stream, read in
 	var (
 		accept bool
 	)
+	dbgInfo := fmt.Sprintf("as %s qs %s in %s",
+		strconv.FormatBool(c.isAppServer),
+		strconv.FormatBool(c.isQuicServer),
+		strconv.FormatBool(isIn))
 	if c.isAppServer && c.isQuicServer {
 		accept = isIn
 	} else if !c.isAppServer && !c.isQuicServer {
 		accept = isIn
 	} else {
-		err = fmt.Errorf(
-			"not yet implemented: as %s qs %s in %s",
-			strconv.FormatBool(c.isAppServer),
-			strconv.FormatBool(c.isQuicServer),
-			strconv.FormatBool(isIn))
+		err = fmt.Errorf("not yet implemented %s", dbgInfo)
 		return
 	}
 	if accept {
-		c.logger.Debug("makeQStream: accepting", "id", id)
+		c.logger.Debug("makeQStream: accepting", "id", id, "dbgInfo", dbgInfo)
 		if qst, err = c.qc.AcceptStream(c.ctx); err != nil {
 			err = fmt.Errorf("error accepting %s stream: %v", id, err)
 			return
@@ -111,7 +111,7 @@ func (c *connection) makeQStream(id string, isIn bool) (qst quic.Stream, read in
 		c.GetLogger().Info("stream accepted", "id", id)
 		read = 4
 	} else {
-		c.logger.Debug("makeQStream: opening", "id", id)
+		c.logger.Debug("makeQStream: opening", "id", id, "dbgInfo", dbgInfo)
 		if qst, err = c.qc.OpenStream(); err != nil {
 			c.logger.Debug("makeQStream: open error", "id", id, "err", err)
 			err = fmt.Errorf("error opening %s stream: %v", id, err)
@@ -152,7 +152,7 @@ func (c *connection) AddIStream(id string) (IStream, error) {
 	if ok {
 		return nil, fmt.Errorf("istream already exists: %s", id)
 	}
-	qst, read, _, err := c.makeQStream(id, true)
+	qst, read, _, err := c.makeQStream(id, !c.isAppServer)
 	if err != nil {
 		return nil, err
 	}
@@ -170,7 +170,7 @@ func (c *connection) AddOStream(id string) (OStream, error) {
 	if ok {
 		return nil, fmt.Errorf("ostream already exists: %s", id)
 	}
-	qst, _, written, err := c.makeQStream(id, false)
+	qst, _, written, err := c.makeQStream(id, c.isAppServer)
 	if err != nil {
 		return nil, err
 	}
