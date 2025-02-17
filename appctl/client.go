@@ -28,8 +28,8 @@ type AppClient interface {
 type FcClient interface {
 	GetDesc() FunctionDesc
 	GetId() string
-	AddIStream(IStream) error
-	AddOStream(OStream) error
+	AddIStream(OStream) error
+	AddOStream(IStream) error
 	Run() error
 	Start() error
 	StartWith(im Marshaller, in any) error
@@ -55,19 +55,18 @@ func (fc *fcClient) GetId() string {
 	return fc.id
 }
 
-func (fc *fcClient) AddIStream(is IStream) error {
+func (fc *fcClient) AddIStream(os OStream) error {
 	fd := fc.desc
-	if len(fc.isIds) >= len(fd.IStreams) {
-		return fmt.Errorf("cannot add more than %d istreams", len(fd.IStreams))
+	if len(fc.osIds) >= len(fd.OStreams) {
+		return fmt.Errorf("cannot add more than %d istreams", len(fd.OStreams))
 	}
-	isd := fd.IStreams[len(fc.isIds)]
+	osd := fd.OStreams[len(fc.osIds)]
 	req := FuncAddStreamReqMsg{
 		FuncId:   fc.id,
-		StreamId: is.Id(),
-		Discrete: isd.Discrete,
-		MaxLen:   isd.MaxLen,
-		MaxNb:    isd.MaxNb,
-		BSize:    isd.BSize,
+		StreamId: os.Id(),
+		Discrete: osd.Discrete,
+		MaxLen:   osd.MaxLen,
+		MaxNb:    osd.MaxNb,
 	}
 	rsp := RespMsg{}
 	ac := fc.ac
@@ -96,18 +95,19 @@ func (fc *fcClient) AddIStream(is IStream) error {
 	return nil
 }
 
-func (fc *fcClient) AddOStream(os OStream) error {
+func (fc *fcClient) AddOStream(is IStream) error {
 	fd := fc.desc
-	if len(fc.osIds) >= len(fd.OStreams) {
-		return fmt.Errorf("cannot add more than %d ostreams", len(fd.OStreams))
+	if len(fc.isIds) >= len(fd.IStreams) {
+		return fmt.Errorf("cannot add more than %d ostreams", len(fd.IStreams))
 	}
-	osd := fd.OStreams[len(fc.osIds)]
+	isd := fd.IStreams[len(fc.isIds)]
 	req := FuncAddStreamReqMsg{
 		FuncId:   fc.id,
-		StreamId: os.Id(),
-		Discrete: osd.Discrete,
-		MaxLen:   osd.MaxLen,
-		MaxNb:    osd.MaxNb,
+		StreamId: is.Id(),
+		Discrete: isd.Discrete,
+		MaxLen:   isd.MaxLen,
+		MaxNb:    isd.MaxNb,
+		BSize:    isd.BSize,
 	}
 	rsp := RespMsg{}
 	ac := fc.ac
@@ -417,7 +417,7 @@ func (ac *appClient) AddIStream(id string) (OStream, error) {
 	var os OStream
 	rqDc, rid := ac.launchBg(
 		func(rid uint64, req, _, rsp, _ any) error {
-			err := ac.sendCtrl(rid, CmdAddOStream, req, nil)
+			err := ac.sendCtrl(rid, CmdAddIStream, req, nil)
 			if err != nil {
 				return err
 			}
@@ -453,7 +453,7 @@ func (ac *appClient) GetOStream(id string) (IStream, error) {
 	var is IStream
 	rqDc, rid := ac.launchBg(
 		func(rid uint64, req, _, rsp, _ any) error {
-			err := ac.sendCtrl(rid, CmdAddIStream, req, nil)
+			err := ac.sendCtrl(rid, CmdAddOStream, req, nil)
 			if err != nil {
 				return err
 			}
@@ -505,7 +505,7 @@ func (ac *appClient) closeStream(id string, isIn bool) error {
 	if arsp.Error != "" {
 		return errors.New(arsp.Error)
 	}
-	err := ac.cnc.CloseStream(id, isIn)
+	err := ac.cnc.CloseStream(id, !isIn)
 	if err != nil {
 		return err
 	}
@@ -514,15 +514,15 @@ func (ac *appClient) closeStream(id string, isIn bool) error {
 }
 
 func (ac *appClient) CloseIStream(id string) error {
-	if ac.cnc.GetIStream(id) == nil {
-		return fmt.Errorf("istream does not exist: %s", id)
+	if ac.cnc.GetOStream(id) == nil {
+		return fmt.Errorf("ostream does not exist: %s", id)
 	}
 	return ac.closeStream(id, true)
 }
 
 func (ac *appClient) CloseOStream(id string) error {
-	if ac.cnc.GetOStream(id) == nil {
-		return fmt.Errorf("ostream does not exist: %s", id)
+	if ac.cnc.GetIStream(id) == nil {
+		return fmt.Errorf("istream does not exist: %s", id)
 	}
 	return ac.closeStream(id, false)
 }

@@ -147,12 +147,11 @@ func (c *connection) AddIStream(id string) (IStream, error) {
 	c.logger.Debug("new istream creating", "id", id)
 	c.mux.Lock()
 	defer c.mux.Unlock()
-	c.logger.Debug("new istream creating locked", "id", id)
 	_, ok := c.iss[id]
 	if ok {
 		return nil, fmt.Errorf("istream already exists: %s", id)
 	}
-	qst, read, _, err := c.makeQStream(id, !c.isAppServer)
+	qst, read, _, err := c.makeQStream(id, true)
 	if err != nil {
 		return nil, err
 	}
@@ -165,12 +164,11 @@ func (c *connection) AddOStream(id string) (OStream, error) {
 	c.logger.Debug("new ostream creating", "id", id)
 	c.mux.Lock()
 	defer c.mux.Unlock()
-	c.logger.Debug("new ostream creating locked", "id", id)
 	_, ok := c.oss[id]
 	if ok {
 		return nil, fmt.Errorf("ostream already exists: %s", id)
 	}
-	qst, _, written, err := c.makeQStream(id, c.isAppServer)
+	qst, _, written, err := c.makeQStream(id, false)
 	if err != nil {
 		return nil, err
 	}

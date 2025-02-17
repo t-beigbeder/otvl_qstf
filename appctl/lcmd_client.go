@@ -30,14 +30,15 @@ func NewLocalCommandClient(ac AppClient, spec LocalCommandClientSpec) (fc FcClie
 	if fc, err = ac.NewFunction(spec.FName, spec.FId); err != nil {
 		return
 	}
-	if err = fc.AddOStream(osti); err != nil {
+	if err = fc.AddIStream(osti); err != nil {
 		return
 	}
-	if err = fc.AddIStream(isto); err != nil {
+	if err = fc.AddOStream(isto); err != nil {
 		return
 	}
-	if err = fc.AddIStream(iste); err != nil {
+	if err = fc.AddOStream(iste); err != nil {
 		return
 	}
+	stdin, stdout, stderr = osti, isto, iste
 	return
 }

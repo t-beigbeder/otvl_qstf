@@ -269,11 +269,11 @@ func NewAppClientWithFuncStdio(port string, fName string) (AppClient, FcClient, 
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
-	err = fc.AddOStream(os)
+	err = fc.AddOStream(is)
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
-	err = fc.AddIStream(is)
+	err = fc.AddIStream(os)
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}

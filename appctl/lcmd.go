@@ -35,8 +35,8 @@ func (sw *lcStartWait) Start(ctx context.Context) error {
 	sw.cmd.Env = cs.Env
 	sw.cmd.Dir = cs.Dir
 	sw.cmd.Stdin = fc.GetInStreams()[0]
-	sw.cmd.Stdout = fc.GetOutStreams()[1]
-	sw.cmd.Stderr = fc.GetOutStreams()[2]
+	sw.cmd.Stdout = fc.GetOutStreams()[0]
+	sw.cmd.Stderr = fc.GetOutStreams()[1]
 	err := sw.cmd.Start()
 	if err != nil {
 		return err

@@ -85,10 +85,10 @@ func (ac *appServerCnc) Handle() error {
 	}
 	ac.GetLogger().Info("Received request", "cmd", cmd, "req", areq, "rid", rid, "payload", len(payload))
 	switch cmd {
-	case CmdAddOStream:
-		ac.controlWorkload(cmd, rid, areq, nil, getOStream)
 	case CmdAddIStream:
 		ac.controlWorkload(cmd, rid, areq, nil, addIStream)
+	case CmdAddOStream:
+		ac.controlWorkload(cmd, rid, areq, nil, getOStream)
 	case CmdCloseStream:
 		ac.controlWorkload(cmd, rid, areq, nil, closeStream)
 	case CmdGetFDesc:
