@@ -8,8 +8,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/t-beigbeder/otvl_qstf/internal/bfio"
 	"github.com/t-beigbeder/otvl_qstf/stf"
-	"io"
-	"os"
 	"testing"
 	"time"
 )
@@ -414,7 +412,7 @@ func TestSWFuncRawPayload(t *testing.T) {
 	cancel()
 }
 
-func TestNewLocalCommandClient(t *testing.T) {
+func TestNewLocalCommandBase(t *testing.T) {
 	port, cancel, err := RunTestServer(func(as AppServer) {
 		err := LocalCommandFuncDeclarer(t.Name(), "in", "out", "err")(as.Catalog())
 		if err != nil {
@@ -422,53 +420,89 @@ func TestNewLocalCommandClient(t *testing.T) {
 		}
 	})
 	require.NoError(t, err)
-	ac, err := NewAppClient(context.Background(), "localhost:"+port, GetLoggerFor("client"))
-	require.NoError(t, err)
-	fc, _, out, ser, err := NewLocalCommandClient(ac, LocalCommandClientSpec{t.Name(), "", "in", "out", "err"})
-	require.NoError(t, err)
-	var (
-		sout string
-		serr string
-	)
-	obs := bfio.NewBufWr()
-	ebs := bfio.NewBufWr()
-	go func() {
-		err := ac.CloseIStream("in", true)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, "close istream error:", err)
-			return
-		}
-		go func() {
-			_, err = io.Copy(obs, out)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "out err: %s\n", err)
-				return
-			}
-			sout = string(obs.Bytes())
-			fmt.Fprintf(os.Stderr, "out: %s\n", ser)
-		}()
-		go func() {
-			_, err = io.Copy(ebs, ser)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "ser err: %s\n", err)
-				return
-			}
-			serr = string(ebs.Bytes())
-			fmt.Fprintf(os.Stderr, "ser: %s\n", ser)
-		}()
-	}()
-	err = fc.StartWith(MarshalJson, &stf.CommandSpec{
+	cms := stf.CommandSpec{
 		Cmd:  "ls",
 		Args: []string{"-l", ".", "nono"},
 		Env:  nil,
 		Dir:  "/tmp",
-	})
+	}
+	ac, fc, sin, sou, ser, err := NewAppClientWithLocalCommand(port, t.Name(), &cms)
 	require.NoError(t, err)
-	es := CommandExitStatus{}
-	err = fc.WaitWith(MarshalJson, &es)
+
+	stdout := bfio.NewBufWr()
+	stderr := bfio.NewBufWr()
+	go func() {
+		BgSinSouSer(ac, fc, sin, sou, ser, nil, stdout, stderr)
+	}()
+
+	ec, err := WaitForLocalCommand(fc)
 	require.NoError(t, err)
+	require.Equal(t, 2, ec)
+	require.Contains(t, string(stdout.Bytes()), "total ")
+	require.Contains(t, string(stderr.Bytes()), "No such file or directory")
 	err = fc.Close()
 	require.NoError(t, err)
-	_, _ = sout, serr
+	cancel()
+}
+
+func TestNewLocalCommandIn(t *testing.T) {
+	port, cancel, err := RunTestServer(func(as AppServer) {
+		err := LocalCommandFuncDeclarer(t.Name(), "in", "out", "err")(as.Catalog())
+		if err != nil {
+			t.Fatal(err)
+		}
+	})
+	require.NoError(t, err)
+	cms := stf.CommandSpec{
+		Cmd: "cat",
+	}
+	ac, fc, sin, sou, ser, err := NewAppClientWithLocalCommand(port, t.Name(), &cms)
+	require.NoError(t, err)
+
+	stdout := bfio.NewBufWr()
+	stderr := bfio.NewBufWr()
+	go func() {
+		stdin := []byte("hello " + t.Name())
+		BgSinSouSer(ac, fc, sin, sou, ser, stdin, stdout, stderr)
+	}()
+
+	ec, err := WaitForLocalCommand(fc)
+	require.NoError(t, err)
+	require.Equal(t, 0, ec)
+	require.Contains(t, string(stdout.Bytes()), "hello "+t.Name())
+	require.Equal(t, "", string(stderr.Bytes()))
+	err = fc.Close()
+	require.NoError(t, err)
+	cancel()
+}
+
+func TestNewLocalCommandIO(t *testing.T) {
+	port, cancel, err := RunTestServer(func(as AppServer) {
+		err := LocalCommandFuncDeclarer(t.Name(), "in", "out", "err")(as.Catalog())
+		if err != nil {
+			t.Fatal(err)
+		}
+	})
+	require.NoError(t, err)
+	cms := stf.CommandSpec{
+		Cmd: "grep", Args: []string{"llo " + t.Name()},
+	}
+	ac, fc, sin, sou, ser, err := NewAppClientWithLocalCommand(port, t.Name(), &cms)
+	require.NoError(t, err)
+
+	stdout := bfio.NewBufWr()
+	stderr := bfio.NewBufWr()
+	go func() {
+		stdin := []byte("hello " + t.Name())
+		BgSinSouSer(ac, fc, sin, sou, ser, stdin, stdout, stderr)
+	}()
+
+	ec, err := WaitForLocalCommand(fc)
+	require.NoError(t, err)
+	require.Equal(t, 0, ec)
+	require.Contains(t, string(stdout.Bytes()), "hello "+t.Name())
+	require.Equal(t, "", string(stderr.Bytes()))
+	err = fc.Close()
+	require.NoError(t, err)
 	cancel()
 }

@@ -1,12 +1,14 @@
 package appctl
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/quic-go/quic-go"
+	"github.com/t-beigbeder/otvl_qstf/internal/bfio"
 	"github.com/t-beigbeder/otvl_qstf/internal/netutils"
 	"github.com/t-beigbeder/otvl_qstf/stf"
 	"io"
@@ -313,4 +315,47 @@ func BgStdInOut(rr io.Reader, wr io.Writer, label string, isJson bool, out *stri
 		}
 		*out = string(bs)
 	}
+}
+
+func NewAppClientWithLocalCommand(port string, fName string, cms *stf.CommandSpec) (AppClient, FcClient, io.Writer, io.Reader, io.Reader, error) {
+	ac, err := NewAppClient(context.Background(), "localhost:"+port, GetLoggerFor("client"))
+	if err != nil {
+		return nil, nil, nil, nil, nil, err
+	}
+	fc, sin, sou, ser, err := StartNewLocalCommand(ac, LocalCommandClientSpec{FName: fName}, cms)
+	if err != nil {
+		return nil, nil, nil, nil, nil, err
+	}
+	return ac, fc, sin, sou, ser, err
+}
+
+func BgSinSouSer(ac AppClient, fc FcClient, sin io.Writer, sou, ser io.Reader, stdin []byte, stdout, stderr bfio.BufWriter) {
+	go func() {
+		if stdin != nil {
+			if _, err := io.Copy(sin, bytes.NewReader(stdin)); err != nil {
+				fmt.Fprintf(os.Stderr, "copy sin err: %s\n", err)
+				return
+			}
+		}
+		if err := ac.CloseIStream(fc.GetId()+"/in", true); err != nil {
+			fmt.Fprintln(os.Stderr, "close istream error:", err)
+			return
+		}
+	}()
+
+	go func() {
+		if _, err := io.Copy(stdout, sou); err != nil {
+			fmt.Fprintf(os.Stderr, "copy sou error: %s\n", err)
+			return
+		}
+		fmt.Fprintf(os.Stderr, "copy out: %d\n", len(stdout.Bytes()))
+	}()
+
+	go func() {
+		if _, err := io.Copy(stderr, ser); err != nil {
+			fmt.Fprintf(os.Stderr, "copy ser error: %s\n", err)
+			return
+		}
+		fmt.Fprintf(os.Stderr, "copy ser: %d\n", len(stderr.Bytes()))
+	}()
 }
