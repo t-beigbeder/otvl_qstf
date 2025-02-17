@@ -21,7 +21,8 @@ type IStreamDesc struct {
 }
 
 type OStreamDesc struct {
-	StreamDesc `json:""`
+	StreamDesc       `json:""`
+	CloseOnTerminate bool `json:"closeOnTerminate"`
 }
 
 type Marshaller int

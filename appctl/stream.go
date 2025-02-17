@@ -19,6 +19,7 @@ type OStream interface {
 	Qid() string
 	QStream() quic.Stream
 	io.Writer
+	io.Closer
 }
 
 type IOStream interface {
@@ -85,6 +86,13 @@ func (os *ostream) Write(p []byte) (n int, err error) {
 	os.logger.Debug("written data", "n", n, "err", err)
 	os.written += n
 	return
+}
+
+func (os *ostream) Close() error {
+	os.logger.Debug("closing")
+	err := os.os.Close()
+	os.logger.Debug("closed", "err", err)
+	return err
 }
 
 func (os *ostream) QStream() quic.Stream {

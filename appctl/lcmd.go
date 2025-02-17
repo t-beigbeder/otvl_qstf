@@ -52,10 +52,10 @@ func (sw *lcStartWait) Wait(ctx context.Context) error {
 	defer func() {
 		iErr := fc.TerminateStream(fc.GetInStreams()[0].GetName(), true)
 		err = errors.Join(err, iErr)
-		//iErr = fc.TerminateStream(fc.GetOutStreams()[0].GetName(), false)
-		//err = errors.Join(err, iErr)
-		//iErr = fc.TerminateStream(fc.GetOutStreams()[1].GetName(), false)
-		//err = errors.Join(err, iErr)
+		iErr = fc.TerminateStream(fc.GetOutStreams()[0].GetName(), false)
+		err = errors.Join(err, iErr)
+		iErr = fc.TerminateStream(fc.GetOutStreams()[1].GetName(), false)
+		err = errors.Join(err, iErr)
 	}()
 	if err != nil {
 		ee := &exec.ExitError{}
@@ -76,8 +76,8 @@ func LocalCommandFuncDeclarer(fName, isName, osName, esName string) func(*Functi
 					{StreamDesc: StreamDesc{Name: isName}},
 				},
 				OStreams: []OStreamDesc{
-					{StreamDesc: StreamDesc{Name: osName}},
-					{StreamDesc: StreamDesc{Name: esName}},
+					{StreamDesc: StreamDesc{Name: osName}, CloseOnTerminate: true},
+					{StreamDesc: StreamDesc{Name: esName}, CloseOnTerminate: true},
 				},
 				Wrapper: WrapperDesc{InMarshaller: MarshalJson, OutMarshaller: MarshalJson},
 			},

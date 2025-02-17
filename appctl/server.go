@@ -416,6 +416,7 @@ func funcAddOStream(ac *appServerCnc, _ uint64, areq any, _ []byte) (arsp any, _
 	stx := len(fc.GetOutStreams())
 	opts = append(opts, stf.OstDiscrete(fd.OStreams[stx].Discrete))
 	opts = append(opts, stf.OstMaxNb(fd.OStreams[stx].MaxNb))
+	opts = append(opts, stf.OstCloseOnTerminate(fd.OStreams[stx].CloseOnTerminate))
 	osths := sths.ohs[stx]
 	if osths.BGet != nil {
 		opts = append(opts, stf.OstBGet(osths.BGet))

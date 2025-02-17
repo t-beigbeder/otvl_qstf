@@ -430,6 +430,8 @@ func TestNewLocalCommandClient(t *testing.T) {
 		sout string
 		serr string
 	)
+	obs := bfio.NewBufWr()
+	ebs := bfio.NewBufWr()
 	go func() {
 		err := ac.CloseIStream("in", true)
 		if err != nil {
@@ -437,7 +439,6 @@ func TestNewLocalCommandClient(t *testing.T) {
 			return
 		}
 		go func() {
-			obs := bfio.NewBufWr()
 			_, err = io.Copy(obs, out)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "out err: %s\n", err)
@@ -447,7 +448,6 @@ func TestNewLocalCommandClient(t *testing.T) {
 			fmt.Fprintf(os.Stderr, "out: %s\n", ser)
 		}()
 		go func() {
-			ebs := bfio.NewBufWr()
 			_, err = io.Copy(ebs, ser)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "ser err: %s\n", err)
@@ -467,7 +467,8 @@ func TestNewLocalCommandClient(t *testing.T) {
 	es := CommandExitStatus{}
 	err = fc.WaitWith(MarshalJson, &es)
 	require.NoError(t, err)
+	err = fc.Close()
+	require.NoError(t, err)
 	_, _ = sout, serr
-	time.Sleep(100 * time.Millisecond)
 	cancel()
 }
