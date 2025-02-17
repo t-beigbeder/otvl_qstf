@@ -116,6 +116,7 @@ type AddStreamReqMsg struct {
 type CloseStreamReqMsg struct {
 	StreamId string `json:"streamId"`
 	IsIn     bool   `json:"isIn"`
+	Force    bool   `json:"force"`
 }
 
 type GetFDescReqMsg struct {

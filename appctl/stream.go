@@ -3,6 +3,7 @@ package appctl
 import (
 	"github.com/quic-go/quic-go"
 	"io"
+	"log/slog"
 	"strconv"
 )
 
@@ -29,9 +30,10 @@ type IOStream interface {
 }
 
 type istream struct {
-	id   string
-	is   quic.Stream
-	read int
+	logger *slog.Logger
+	id     string
+	is     quic.Stream
+	read   int
 }
 
 var _ IStream = &istream{}
@@ -45,7 +47,9 @@ func (is *istream) Qid() string {
 }
 
 func (is *istream) Read(p []byte) (n int, err error) {
+	is.logger.Debug("reading data", "lenp", len(p))
 	n, err = is.is.Read(p)
+	is.logger.Debug("read data", "n", n, "err", err)
 	is.read += n
 	return
 }
@@ -54,11 +58,12 @@ func (is *istream) QStream() quic.Stream {
 	return is.is
 }
 
-func NewIStream(id string, is quic.Stream, read int) IStream {
-	return &istream{id, is, read}
+func NewIStream(logger *slog.Logger, id string, is quic.Stream, read int) IStream {
+	return &istream{logger, id, is, read}
 }
 
 type ostream struct {
+	logger  *slog.Logger
 	id      string
 	os      quic.Stream
 	written int
@@ -75,7 +80,9 @@ func (os *ostream) Qid() string {
 }
 
 func (os *ostream) Write(p []byte) (n int, err error) {
+	os.logger.Debug("writing data", "lenp", len(p))
 	n, err = os.os.Write(p)
+	os.logger.Debug("written data", "n", n, "err", err)
 	os.written += n
 	return
 }
@@ -84,8 +91,8 @@ func (os *ostream) QStream() quic.Stream {
 	return os.os
 }
 
-func NewOStream(id string, os quic.Stream, written int) OStream {
-	return &ostream{id, os, written}
+func NewOStream(logger *slog.Logger, id string, os quic.Stream, written int) OStream {
+	return &ostream{logger, id, os, written}
 }
 
 type iostream struct {
@@ -107,9 +114,9 @@ func (ios *iostream) QStream() quic.Stream {
 	return ios.istream.is
 }
 
-func NewIOStream(id string, st quic.Stream, read, written int) IOStream {
+func NewIOStream(logger *slog.Logger, id string, st quic.Stream, read, written int) IOStream {
 	return &iostream{
-		istream: istream{id, st, read},
-		ostream: ostream{id, st, written},
+		istream: istream{logger, id, st, read},
+		ostream: ostream{logger, id, st, written},
 	}
 }

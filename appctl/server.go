@@ -212,26 +212,48 @@ func closeStream(ac *appServerCnc, _ uint64, areq any, _ []byte) (any, []byte) {
 	var err error
 	req, _ := areq.(*CloseStreamReqMsg)
 	rsp := &RespMsg{}
+	stId := req.StreamId
 	if req.IsIn {
-		for fcId, fc := range ac.funcs {
-			for _, is := range fc.GetInStreams() {
-				if is.GetName() == req.StreamId {
-					err = errors.Join(err, fmt.Errorf("istream id %s owned by function %s", req.StreamId, fcId))
-				}
-			}
+		if ac.cnc.GetIStream(stId) == nil {
+			err = fmt.Errorf("istream %s does not exist", stId)
 		}
 	} else {
-		for fcId, fc := range ac.funcs {
-			for _, os := range fc.GetOutStreams() {
-				if os.GetName() == req.StreamId {
-					err = errors.Join(err, fmt.Errorf("ostream id %s owned by function %s", req.StreamId, fcId))
+		if ac.cnc.GetOStream(stId) == nil {
+			err = fmt.Errorf("ostream %s does not exist", stId)
+		}
+	}
+	if err == nil {
+		if req.IsIn {
+			for fcId, fc := range ac.funcs {
+				for _, is := range fc.GetInStreams() {
+					if is.GetName() == stId {
+						if req.Force {
+							err = fc.TerminateStream(stId, true)
+						} else {
+							err = errors.Join(err, fmt.Errorf("istream id %s owned by function %s", stId, fcId))
+						}
+					}
+				}
+			}
+		} else {
+			for fcId, fc := range ac.funcs {
+				for _, os := range fc.GetOutStreams() {
+					if os.GetName() == stId {
+						if req.Force {
+							err = fc.TerminateStream(stId, false)
+						} else {
+							err = errors.Join(err, fmt.Errorf("ostream id %s owned by function %s", stId, fcId))
+						}
+					}
 				}
 			}
 		}
 	}
 	if err != nil {
 		rsp.Error = err.Error()
+		return rsp, nil
 	}
+	ac.cnc.CloseStream(stId, req.IsIn)
 	return rsp, nil
 }
 

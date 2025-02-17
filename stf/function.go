@@ -35,6 +35,7 @@ type Function interface {
 	GetOutStream(string) OutStream
 	GetInStreams() []InStream
 	GetOutStreams() []OutStream
+	TerminateStream(string, bool) error
 	Run() error
 	Start() error
 	Wait() error
@@ -105,6 +106,23 @@ func (fc *function) GetInStream(s string) InStream {
 func (fc *function) GetOutStream(s string) OutStream {
 	os, _ := fc.outs[s]
 	return os
+}
+
+func (fc *function) TerminateStream(s string, isIn bool) error {
+	if isIn {
+		is, ok := fc.ins[s]
+		if !ok {
+			return fmt.Errorf("no istream %s", s)
+		}
+		is.Terminate()
+	} else {
+		os, ok := fc.outs[s]
+		if !ok {
+			return fmt.Errorf("no ostream %s", s)
+		}
+		os.Terminate()
+	}
+	return nil
 }
 
 func (fc *function) GetInStreams() []InStream {

@@ -134,7 +134,8 @@ func (c *connection) SetCtrlStream() error {
 	if err != nil {
 		return err
 	}
-	c.ctlStream = NewIOStream("control", qst, read, written)
+	logger := c.GetLogger().With("iostream", "control")
+	c.ctlStream = NewIOStream(logger, "control", qst, read, written)
 	c.logger.Debug("set ctrl stream", "id", c.id, "qid", c.ctlStream.Qid())
 	return nil
 }
@@ -155,7 +156,8 @@ func (c *connection) AddIStream(id string) (IStream, error) {
 	if err != nil {
 		return nil, err
 	}
-	c.iss[id] = NewIStream(id, qst, read)
+	logger := c.GetLogger().With("istream", id)
+	c.iss[id] = NewIStream(logger, id, qst, read)
 	c.logger.Debug("new istream created", "id", id, "qid", c.iss[id].Qid())
 	return c.iss[id], nil
 }
@@ -172,7 +174,8 @@ func (c *connection) AddOStream(id string) (OStream, error) {
 	if err != nil {
 		return nil, err
 	}
-	c.oss[id] = NewOStream(id, qst, written)
+	logger := c.GetLogger().With("ostream", id)
+	c.oss[id] = NewOStream(logger, id, qst, written)
 	c.logger.Debug("new ostream created", "id", id, "qid", c.oss[id].Qid())
 	return c.oss[id], nil
 }
@@ -184,10 +187,18 @@ func (c *connection) CloseStream(id string, isIn bool) error {
 		if c.GetIStream(id) == nil {
 			return fmt.Errorf("istream does not exist: %s", id)
 		}
+		err := c.GetIStream(id).QStream().Close()
+		if err != nil {
+			return err
+		}
 		delete(c.iss, id)
 	} else {
 		if c.GetOStream(id) == nil {
 			return fmt.Errorf("ostream does not exist: %s", id)
+		}
+		err := c.GetOStream(id).QStream().Close()
+		if err != nil {
+			return err
 		}
 		delete(c.oss, id)
 	}

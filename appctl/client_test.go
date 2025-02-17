@@ -6,7 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"github.com/stretchr/testify/require"
+	"github.com/t-beigbeder/otvl_qstf/internal/bfio"
 	"github.com/t-beigbeder/otvl_qstf/stf"
+	"io"
 	"os"
 	"testing"
 	"time"
@@ -368,23 +370,23 @@ func TestCloseStream(t *testing.T) {
 	err = fc.Start()
 	require.NoError(t, err)
 	time.Sleep(20 * time.Millisecond)
-	err = ac.CloseOStream(os.Id())
+	err = ac.CloseOStream(os.Id(), false)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "does not exist")
-	err = ac.CloseIStream(is.Id())
+	err = ac.CloseIStream(is.Id(), false)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "does not exist")
-	err = ac.CloseIStream(os.Id())
+	err = ac.CloseIStream(os.Id(), false)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "owned by function")
-	err = ac.CloseOStream(is.Id())
+	err = ac.CloseOStream(is.Id(), false)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "owned by function")
 	err = fc.Close()
 	require.NoError(t, err)
-	err = ac.CloseIStream(os.Id())
+	err = ac.CloseIStream(os.Id(), false)
 	require.NoError(t, err)
-	err = ac.CloseOStream(is.Id())
+	err = ac.CloseOStream(is.Id(), false)
 	require.NoError(t, err)
 }
 
@@ -422,30 +424,42 @@ func TestNewLocalCommandClient(t *testing.T) {
 	require.NoError(t, err)
 	ac, err := NewAppClient(context.Background(), "localhost:"+port, GetLoggerFor("client"))
 	require.NoError(t, err)
-	fc, in, out, ser, err := NewLocalCommandClient(ac, LocalCommandClientSpec{t.Name(), "", "in", "out", "err"})
+	fc, _, out, ser, err := NewLocalCommandClient(ac, LocalCommandClientSpec{t.Name(), "", "in", "out", "err"})
 	require.NoError(t, err)
 	var (
 		sout string
 		serr string
 	)
 	go func() {
-		in.Write(toBytes([]byte("hello world " + t.Name())))
-		bs, err := fromBytes(out)
+		err := ac.CloseIStream("in", true)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "fromBytes: %s\n", err)
+			fmt.Fprintln(os.Stderr, "close istream error:", err)
 			return
 		}
-		bs, err = fromBytes(ser)
-		sout = string(bs)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "fromBytes: %s\n", err)
-			return
-		}
-		serr = string(bs)
+		go func() {
+			obs := bfio.NewBufWr()
+			_, err = io.Copy(obs, out)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "out err: %s\n", err)
+				return
+			}
+			sout = string(obs.Bytes())
+			fmt.Fprintf(os.Stderr, "out: %s\n", ser)
+		}()
+		go func() {
+			ebs := bfio.NewBufWr()
+			_, err = io.Copy(ebs, ser)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "ser err: %s\n", err)
+				return
+			}
+			serr = string(ebs.Bytes())
+			fmt.Fprintf(os.Stderr, "ser: %s\n", ser)
+		}()
 	}()
 	err = fc.StartWith(MarshalJson, &stf.CommandSpec{
 		Cmd:  "ls",
-		Args: []string{"-l"},
+		Args: []string{"-l", ".", "nono"},
 		Env:  nil,
 		Dir:  "/tmp",
 	})
@@ -454,5 +468,6 @@ func TestNewLocalCommandClient(t *testing.T) {
 	err = fc.WaitWith(MarshalJson, &es)
 	require.NoError(t, err)
 	_, _ = sout, serr
+	time.Sleep(100 * time.Millisecond)
 	cancel()
 }

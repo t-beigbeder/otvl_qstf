@@ -46,15 +46,25 @@ func (sw *lcStartWait) Start(ctx context.Context) error {
 
 func (sw *lcStartWait) Wait(ctx context.Context) error {
 	err := sw.cmd.Wait()
+	fc := CurrentFunction(ctx)
+	ces := &CommandExitStatus{}
+	CurrentValues(ctx)["out-pl"] = ces
+	defer func() {
+		iErr := fc.TerminateStream(fc.GetInStreams()[0].GetName(), true)
+		err = errors.Join(err, iErr)
+		iErr = fc.TerminateStream(fc.GetOutStreams()[0].GetName(), false)
+		err = errors.Join(err, iErr)
+		iErr = fc.TerminateStream(fc.GetOutStreams()[1].GetName(), false)
+		err = errors.Join(err, iErr)
+	}()
 	if err != nil {
 		ee := &exec.ExitError{}
 		if errors.As(err, &ee) {
-			CurrentValues(ctx)["out-pl"] = &CommandExitStatus{ExitCode: ee.ExitCode()}
-			return nil
+			ces.ExitCode = ee.ExitCode()
+			err = nil
 		}
-		return err
 	}
-	return nil
+	return err
 }
 
 func LocalCommandFuncDeclarer(fName, isName, osName, esName string) func(*FunctionCatalog) error {
