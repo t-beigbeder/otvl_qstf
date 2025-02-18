@@ -100,7 +100,15 @@ func (sw *TSW) Start(ctx context.Context) error {
 	fc := CurrentFunction(ctx)
 	cn.GetLogger().Debug("TSW Start", "fc", fc.Options())
 	cn.GetLogger().Debug("TSW Start", "fc", CurrentValues(ctx))
-	fc.GetInStreams()[0].Start()
+	in := fc.GetInStreams()[0]
+	if !in.Options().Discrete {
+		CurrentValues(ctx)["pr"], CurrentValues(ctx)["pw"] = io.Pipe()
+	}
+	in.Start()
+	out := fc.GetOutStreams()[0]
+	if !out.Options().Discrete {
+		out.Start()
+	}
 	return nil
 }
 
@@ -123,15 +131,29 @@ func GetTSWSthsRaw() *StreamHandlers {
 	return &StreamHandlers{
 		ihs: []IStreamHandler{
 			{
-				BSet: func(ctx context.Context, bytes []byte) error {
+				BSet: func(ctx context.Context, bytes []byte, isEof bool) error {
 					CurrentLogger(ctx).Debug("GetTSWSthsRaw BSet", "bytes", len(bytes))
 					vls := CurrentValues(ctx)
 					if vls == nil {
 						return errors.New("no values")
 					}
 					vls["bytes"] = bytes
-					oss := CurrentFunction(ctx).GetOutStreams()
-					oss[len(oss)-1].Start()
+					apr, ok := CurrentValues(ctx)["pw"]
+					if !ok {
+						return errors.New("no pw in values")
+					}
+					pw, _ := apr.(*io.PipeWriter)
+					_, err := pw.Write(bytes)
+					if err != nil {
+						return err
+					}
+					if isEof {
+						err = pw.Close()
+						if err != nil {
+							return err
+						}
+					}
+					time.Sleep(10 * time.Millisecond)
 					return nil
 				},
 			},
@@ -144,15 +166,19 @@ func GetTSWSthsRaw() *StreamHandlers {
 					if vls == nil {
 						return nil, errors.New("no values")
 					}
-					bytes, ok := vls["bytes"].([]byte)
+					apr, ok := CurrentValues(ctx)["pr"]
 					if !ok {
-						return nil, errors.New("no bytes in values")
+						return nil, errors.New("no pr in values")
 					}
-					CurrentLogger(ctx).Debug("GetTSWSthsRaw BGet", "bytes", len(bytes))
-					rs := make([]byte, len(bytes)+len("response to "))
-					copy(rs[0:], "response to ")
-					copy(rs[len("response to "):], bytes)
-					return rs, nil
+					pr, _ := apr.(*io.PipeReader)
+					bs := make([]byte, 128)
+					n, err := pr.Read(bs)
+					CurrentLogger(ctx).Debug("GetTSWSthsRaw pr Read", "bytes", n, "err", err)
+					if err != nil && err != io.EOF {
+						return nil, err
+					}
+					bs = bs[:n]
+					return bs, err
 				},
 			},
 		},
@@ -229,8 +255,8 @@ func RawFuncDeclarer(fName string, terminable bool) func(*FunctionCatalog) error
 			FunctionDesc{
 				Name:       fName,
 				Terminable: terminable,
-				IStreams:   getStdinDesc(),
-				OStreams:   getStdoutDesc(),
+				IStreams:   []IStreamDesc{{StreamDesc: StreamDesc{Name: "in"}}},
+				OStreams:   []OStreamDesc{{StreamDesc: StreamDesc{Name: "out"}}},
 				Wrapper:    WrapperDesc{InMarshaller: MarshalJson, OutMarshaller: MarshalJson},
 			},
 			&stf.WrappedFunction{
@@ -282,39 +308,66 @@ func NewAppClientWithFuncStdio(port string, fName string) (AppClient, FcClient, 
 	return ac, fc, is, os, nil
 }
 
-func BgStdInOut(rr io.Reader, wr io.Writer, label string, isJson bool, out *string) {
-	var err error
-	bs := []byte("hello world " + label)
-	if isJson {
-		bs, err = toJsonBytes(string(bs))
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "toJsonBytes: %s\n", err)
-			return
+func BgStdInOut(rr io.Reader, wr io.WriteCloser, label string, isJson bool, count int, out *string) {
+
+	go func() {
+		var (
+			bs  []byte
+			err error
+		)
+		for i := 1; i <= count; i++ {
+			if count == 1 {
+				bs = []byte("hello world " + label)
+			} else {
+				bs = []byte(fmt.Sprintf("hello world #%d %s\n", i, label))
+			}
+			if isJson {
+				bs, err = toJsonBytes(string(bs))
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "toJsonBytes: %s\n", err)
+					return
+				}
+			} else {
+				time.Sleep(20 * time.Millisecond)
+			}
+			_, err = wr.Write(bs)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "os.Write: %s\n", err)
+				return
+			}
 		}
-	} else {
-		bs = toBytes(bs)
-	}
-	_, err = wr.Write(bs)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "os.Write: %s\n", err)
-		return
-	}
+		if !isJson {
+			err = wr.Close()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "os.Close: %s\n", err)
+				return
+			}
+		}
+	}()
+
 	time.Sleep(20 * time.Millisecond)
 
-	if isJson {
-		err = fromJsonBytes(rr, out)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "fromBytes: %s\n", err)
-			return
+	go func() {
+		var (
+			bs  []byte
+			err error
+		)
+		if isJson {
+			err = fromJsonBytes(rr, out)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "fromBytes: %s\n", err)
+				return
+			}
+		} else {
+			bs = make([]byte, 128)
+			_, err = rr.Read(bs)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "fromBytes: %s\n", err)
+				return
+			}
+			*out = string(bs)
 		}
-	} else {
-		bs, err = fromBytes(rr)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "fromBytes: %s\n", err)
-			return
-		}
-		*out = string(bs)
-	}
+	}()
 }
 
 func NewAppClientWithLocalCommand(port string, fName string, cms *stf.CommandSpec) (AppClient, FcClient, io.Writer, io.Reader, io.Reader, error) {

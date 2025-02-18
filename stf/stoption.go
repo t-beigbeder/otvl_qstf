@@ -19,6 +19,12 @@ type StOptions struct {
 
 	// MaxNb if set, operation stops the number of discrete data blocks processed after the limit is raised
 	MaxNb int
+
+	// Encryption identities, if any
+	EncIds []string
+
+	// Encryption recipients, if any
+	EncRcps []string
 }
 
 // StOption is a function on the options for a stream.
@@ -31,8 +37,8 @@ type IstOptions struct {
 	// BSize overload the default input buffer size
 	BSize int
 
-	// BSet enables to provide continuously the data read to the client.
-	BSet func(context.Context, []byte) error
+	// BSet enables to provide continuously the data read to the client until EOF.
+	BSet func(context.Context, []byte, bool) error
 
 	// Unmarshaller in Discrete mode converts received raw data to structured data.
 	Unmarshaller func(data []byte, v any) error
@@ -79,6 +85,22 @@ func IstMaxNb(i int) IstOption {
 	}
 }
 
+// IstEncIds is a IstOption to set the stream encryption Ids (private keys)
+func IstEncIds(ids []string) IstOption {
+	return func(o *IstOptions) error {
+		o.EncIds = ids
+		return nil
+	}
+}
+
+// IstEncRcps is a IstOption to set the stream encryption recipients (punlic keys)
+func IstEncRcps(rcps []string) IstOption {
+	return func(o *IstOptions) error {
+		o.EncRcps = rcps
+		return nil
+	}
+}
+
 // IstBsize is a IstOption to set the input buffer size.
 func IstBsize(s int) IstOption {
 	return func(o *IstOptions) error {
@@ -88,7 +110,7 @@ func IstBsize(s int) IstOption {
 }
 
 // IstBSet is a IstOption to set the function providing the data read to the client.
-func IstBSet(bset func(context.Context, []byte) error) IstOption {
+func IstBSet(bset func(context.Context, []byte, bool) error) IstOption {
 	return func(o *IstOptions) error {
 		if bset == nil {
 			return errors.New("no BSet function")
@@ -166,10 +188,26 @@ func OstMaxLen(i int) OstOption {
 	}
 }
 
-// OstMaxNb is a OstOption  to set the stream discrete limit for number of blocks processed.
+// OstMaxNb is a OstOption to set the stream discrete limit for number of blocks processed.
 func OstMaxNb(i int) OstOption {
 	return func(o *OstOptions) error {
 		o.MaxNb = i
+		return nil
+	}
+}
+
+// OstEncIds is a OstOption to set the stream encryption Ids (private keys)
+func OstEncIds(ids []string) OstOption {
+	return func(o *OstOptions) error {
+		o.EncIds = ids
+		return nil
+	}
+}
+
+// OstEncRcps is a OstOption to set the stream encryption Recipients (public keys)
+func OstEncRcps(rcps []string) OstOption {
+	return func(o *OstOptions) error {
+		o.EncRcps = rcps
 		return nil
 	}
 }

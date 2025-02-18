@@ -172,7 +172,7 @@ func (is *inStream) readRaw() looperOut {
 	read, err := is.Read(bs)
 	is.read += read
 	if read != 0 && is.opts.BSet != nil {
-		if iErr := is.opts.BSet(is.ctx, bs[:read]); iErr != nil {
+		if iErr := is.opts.BSet(is.ctx, bs[:read], err == io.EOF); iErr != nil {
 			err = iErr
 		}
 	}
@@ -197,7 +197,7 @@ func (is *inStream) readDiscrete() looperOut {
 	read, err = io.ReadFull(is, bs)
 	is.read += read
 	if read != 0 && is.opts.BSet != nil {
-		if iErr := is.opts.BSet(is.ctx, bs[:read]); iErr != nil {
+		if iErr := is.opts.BSet(is.ctx, bs[:read], err == io.EOF); iErr != nil {
 			return looperOut{err: iErr}
 		}
 	}
@@ -222,8 +222,8 @@ func (is *inStream) looper() looperOut {
 		} else {
 			lo = is.readRaw()
 		}
-		if lo.err != nil {
-			return looperOut{err: lo.err}
+		if lo.err != nil || lo.eof {
+			return looperOut{err: lo.err, eof: lo.eof}
 		}
 		if is.opts.MaxNb > 0 && is.discreteCount >= is.opts.MaxNb {
 			return looperOut{maxProcessed: true}

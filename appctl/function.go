@@ -47,7 +47,7 @@ type FunctionDesc struct {
 }
 
 type IStreamHandler struct {
-	BSet      func(context.Context, []byte) error
+	BSet      func(context.Context, []byte, bool) error
 	Unmarshal func(data []byte, v any) error
 	NewASet   func() any
 	ASet      func(context.Context, any) error

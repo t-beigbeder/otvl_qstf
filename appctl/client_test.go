@@ -183,7 +183,7 @@ func getTestSwSthsRaw() *StreamHandlers {
 	return &StreamHandlers{
 		ihs: []IStreamHandler{
 			{
-				BSet: func(ctx context.Context, bytes []byte) error {
+				BSet: func(ctx context.Context, bytes []byte, isEof bool) error {
 					CurrentLogger(ctx).Debug("getTestSwSths bset", "bytes", bytes)
 					vls := CurrentValues(ctx)
 					if vls == nil {
@@ -228,7 +228,7 @@ func TestRunNTermFuncRaw(t *testing.T) {
 	require.NoError(t, err)
 
 	bgRes := ""
-	go BgStdInOut(is, os, t.Name(), false, &bgRes)
+	go BgStdInOut(is, os, t.Name(), false, 10, &bgRes)
 
 	err = fc.Run()
 	require.NoError(t, err)
@@ -250,7 +250,8 @@ func TestRunTermFunc(t *testing.T) {
 
 	bgRes := ""
 	go func() {
-		BgStdInOut(is, os, t.Name(), true, &bgRes)
+		BgStdInOut(is, os, t.Name(), true, 1, &bgRes)
+		time.Sleep(30 * time.Millisecond)
 		fc.Terminate()
 	}()
 
@@ -278,7 +279,7 @@ func TestSWTermFunc(t *testing.T) {
 
 	bgRes := ""
 	go func() {
-		BgStdInOut(is, os, t.Name(), true, &bgRes)
+		BgStdInOut(is, os, t.Name(), true, 1, &bgRes)
 		fc.Terminate()
 	}()
 
@@ -309,7 +310,7 @@ func TestSWCloseFunc(t *testing.T) {
 
 	bgRes := ""
 	go func() {
-		BgStdInOut(is, os, t.Name(), true, &bgRes)
+		BgStdInOut(is, os, t.Name(), true, 1, &bgRes)
 		fc.Close()
 	}()
 
@@ -336,7 +337,7 @@ func TestSWCloseClient(t *testing.T) {
 
 	bgRes := ""
 	go func() {
-		BgStdInOut(is, os, t.Name(), true, &bgRes)
+		BgStdInOut(is, os, t.Name(), true, 1, &bgRes)
 		ac.Close()
 		time.Sleep(20 * time.Millisecond)
 	}()
@@ -362,7 +363,7 @@ func TestCloseStream(t *testing.T) {
 
 	bgRes := ""
 	go func() {
-		BgStdInOut(is, os, t.Name(), true, &bgRes)
+		BgStdInOut(is, os, t.Name(), true, 1, &bgRes)
 	}()
 
 	err = fc.Start()
@@ -399,7 +400,7 @@ func TestSWFuncRawPayload(t *testing.T) {
 	_, fc, is, os, err := NewAppClientWithFuncStdio(port, t.Name())
 
 	bgRes := ""
-	go BgStdInOut(is, os, t.Name(), false, &bgRes)
+	go BgStdInOut(is, os, t.Name(), false, 10, &bgRes)
 
 	err = fc.StartWith(MarshalJson, &Tin{"TestSWFuncRawPayload"})
 	require.NoError(t, err)
