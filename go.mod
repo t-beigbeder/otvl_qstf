@@ -5,6 +5,7 @@ go 1.23.4
 require (
 	github.com/quic-go/quic-go v0.48.2
 	github.com/stretchr/testify v1.9.0
+	github.com/reugn/go-streams v0.11.0
 )
 
 require (
