@@ -31,6 +31,19 @@ func DisplayDataSet() {
 	source.Via(tsFlow).To(sink)
 }
 
+func GetDataSet() {
+	tsf := func(v any) string {
+		return fmt.Sprintf("%v", v)
+	}
+	source := dataSet()
+	tsFlow := flow.NewMap(tsf, 1)
+	sink := ext.NewChanSink(make(chan any, 1))
+	go source.Via(tsFlow).To(sink)
+	for l := range sink.Out {
+		fmt.Println(l)
+	}
+}
+
 func TotalWordCount() {
 	ewc := func(entry DataSample) int {
 		return entry.Words
