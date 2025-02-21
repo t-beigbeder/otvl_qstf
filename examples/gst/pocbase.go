@@ -1,7 +1,12 @@
 package gst
 
 import (
+	"bytes"
 	"errors"
+	_ "github.com/reugn/go-streams"
+	"github.com/reugn/go-streams/extension"
+	_ "github.com/reugn/go-streams/extension"
+	_ "github.com/reugn/go-streams/flow"
 	"io"
 )
 
@@ -91,14 +96,25 @@ func (s *stream) GetWriter() io.WriteCloser {
 type Function interface {
 }
 
-func SimpleRoundTrip() {
+func setupHosts() (Host, Host, Connection, Connection, Stream, Stream) {
 	h1 := NewHost("host1")
 	h2 := NewHost("host2")
 	c1, _ := h1.Connect("host2")
 	c2 := h2.GetCn("host1")
 	s1, _ := c1.OpenStream("simple1")
 	s2 := c2.GetStream("simple1")
-	_, _, _, _ = c1, c2, s1, s2
+	return h1, h2, c1, c2, s1, s2
+}
+
+func SimpleRoundTrip() {
+	h1, h2, c1, c2, s1, s2 := setupHosts()
+	_, _, _, _, _, _ = h1, h2, c1, c2, s1, s2
+	rs := bytes.NewReader([]byte("hello"))
+	extension.NewReaderSource(rs, func(rr io.Reader) ([]byte, error) {
+		bs := make([]byte, 128)
+		n, err := rr.Read(bs)
+		return bs[:n], err
+	})
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
@@ -120,13 +136,8 @@ func SimpleRoundTrip() {
 }
 
 func StartFuncRoundTrip() {
-	h1 := NewHost("host1")
-	h2 := NewHost("host2")
-	c1, _ := h1.Connect("host2")
-	c2 := h2.GetCn("host1")
-	s1, _ := c1.OpenStream("simple1")
-	s2 := c2.GetStream("simple1")
-	_, _, _, _ = c1, c2, s1, s2
+	h1, h2, c1, c2, s1, s2 := setupHosts()
+	_, _, _, _, _, _ = h1, h2, c1, c2, s1, s2
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
