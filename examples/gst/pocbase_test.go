@@ -1,11 +1,22 @@
 package gst
 
-import "testing"
+import (
+	"github.com/stretchr/testify/require"
+	"testing"
+)
 
 func TestSimpleRoundTrip(t *testing.T) {
-	SimpleRoundTrip()
+	require.NoError(t, SimpleRoundTrip())
 }
 
-func TestStartFuncRoundTrip(t *testing.T) {
-	StartFuncRoundTrip()
+func TestLargeRoundTrip(t *testing.T) {
+	require.NoError(t, LargeRoundTrip())
+}
+
+func TestTwoReadersRoundTrip(t *testing.T) {
+	require.NoError(t, TwoReadersRoundTrip())
+}
+
+func TestSimuFuncRoundTrip(t *testing.T) {
+	require.NoError(t, SimuFuncRoundTrip())
 }

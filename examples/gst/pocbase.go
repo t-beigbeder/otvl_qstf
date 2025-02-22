@@ -105,9 +105,9 @@ func setupHosts() (Host, Host, Connection, Connection, Stream, Stream) {
 	h2 := NewHost("host2")
 	c1, _ := h1.Connect("host2")
 	c2 := h2.GetCn("host1")
-	s1, _ := c1.OpenStream("simple1")
-	s2 := c2.GetStream("simple1")
-	return h1, h2, c1, c2, s1, s2
+	s1a, _ := c1.OpenStream("simple1a")
+	s2a := c2.GetStream("simple1a")
+	return h1, h2, c1, c2, s1a, s2a
 }
 
 func pocDataSet(label string) []byte {
@@ -128,42 +128,133 @@ func SimpleRoundTrip() error {
 	if err != nil {
 		return err
 	}
-	var intErr error
-	done := common.BgLaunch(func() {
+	ie := errors.New("")
+	done := common.BgLaunchErr(func() error {
 		src2, err := gst.NewReaderSource(s2.GetReader(), gst.LBsReader)
 		if err != nil {
-			intErr = err
-			return
+			return err
 		}
 		sink2 := ext.NewStdoutSink()
 		src2.Via(gst.AsStringFlow()).To(sink2)
 		sink2.AwaitCompletion()
-	})
+		return nil
+	}, &ie)
 	src1.Via(flow.NewPassThrough()).To(s1Sink)
 	s1Sink.AwaitCompletion()
 	<-done
-	return intErr
+	if ie != nil {
+		return ie
+	}
+	return nil
 }
 
-func StartFuncRoundTrip() {
+func LargeRoundTrip() error {
+	h1, h2, c1, c2, s1a, s2a := setupHosts()
+	_, _, _, _, _, _ = h1, h2, c1, c2, s1a, s2a
+	src1 := gst.NewSliceSource(common.LargeSample("LargeRoundTrip"))
+	s1Sink, err := gst.NewWriterSink(s1a.GetWriter(), gst.LBsWriter)
+	if err != nil {
+		return err
+	}
+	ie := errors.New("")
+	done := common.BgLaunchErr(func() error {
+		src2, err := gst.NewReaderSource(s2a.GetReader(), gst.LBsReader)
+		if err != nil {
+			return err
+		}
+		sink2 := ext.NewFileSink("/dev/null")
+		src2.Via(gst.AsStringFlow()).To(sink2)
+		sink2.AwaitCompletion()
+		return nil
+	}, &ie)
+	src1.Via(flow.NewPassThrough()).To(s1Sink)
+	s1Sink.AwaitCompletion()
+	<-done
+	if ie != nil {
+		return ie
+	}
+	return nil
+}
+
+func TwoReadersRoundTrip() error {
 	h1, h2, c1, c2, s1, s2 := setupHosts()
 	_, _, _, _, _, _ = h1, h2, c1, c2, s1, s2
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		for {
-			bs := make([]byte, 1024)
-			n, err := s2.GetReader().Read(bs)
-			if err != nil && err != io.EOF {
-				break
-			}
-			println(string(bs[:n]))
-			if err != nil {
-				break
-			}
+	src1 := gst.NewSliceSource(common.Sample("TwoReadersRoundTrip", true))
+	s1Sink, err := gst.NewWriterSink(s1.GetWriter(), gst.LBsWriter)
+	if err != nil {
+		return err
+	}
+	ie := errors.New("")
+	done := common.BgLaunchErr(func() error {
+		src2, err := gst.NewReaderSource(s2.GetReader(), gst.LBsReader)
+		if err != nil {
+			return err
 		}
-	}()
-	s1.GetWriter().Write([]byte("hello"))
-	s1.GetWriter().Close()
+
+		twoFirst := gst.Take(src2, 2)
+		twoFirst.Via(flow.NewMap(func(e any) any {
+			se := string(e.([]byte))
+			return fmt.Sprintf("take2 %s", se)
+		}, 1)).To(ext.NewStdoutSink())
+
+		src2.Via(flow.NewMap(func(e any) any {
+			se := string(e.([]byte))
+			return fmt.Sprintf("following %s", se)
+		}, 1)).To(ext.NewStdoutSink())
+
+		return nil
+	}, &ie)
+	src1.Via(flow.NewPassThrough()).To(s1Sink)
+	s1Sink.AwaitCompletion()
 	<-done
+	if ie != nil {
+		return ie
+	}
+	return nil
+}
+
+func SimuFuncRoundTrip() error {
+	h1, h2, c1, c2, s1a, s2a := setupHosts()
+	_, _, _, _, _, _ = h1, h2, c1, c2, s1a, s2a
+	src1 := gst.NewSliceSource(common.Sample("SimuFuncRoundTrip", true))
+	s1Sink, err := gst.NewWriterSink(s1a.GetWriter(), gst.LBsWriter)
+	if err != nil {
+		return err
+	}
+	ie := errors.New("")
+	done := common.BgLaunchErr(func() error {
+		src2, err := gst.NewReaderSource(s2a.GetReader(), gst.LBsReader)
+		if err != nil {
+			return err
+		}
+		first := gst.Take(src2, 1)
+		first.Via(flow.NewMap(func(e any) any {
+			se := string(e.([]byte))
+			return fmt.Sprintf("take header %s", se)
+		}, 1)).To(ext.NewStdoutSink())
+
+		s1b, err := c2.OpenStream("simple1b")
+		if err != nil {
+			return err
+		}
+		s1bSink, err := gst.NewWriterSink(s1b.GetWriter(), gst.LBsWriter)
+		src2.Via(flow.NewMap(func(e any) any {
+			se := string(e.([]byte))
+			return []byte(fmt.Sprintf("sent back %s", se))
+		}, 1)).To(s1bSink)
+
+		return nil
+	}, &ie)
+	src1.Via(flow.NewPassThrough()).To(s1Sink)
+	s2b := c1.GetStream("simple1b")
+	src2b, err := gst.NewReaderSource(s2b.GetReader(), gst.LBsReader)
+	src2b.Via(flow.NewMap(func(e any) any {
+		se := string(e.([]byte))
+		return fmt.Sprintf("received back %s", se)
+	}, 1)).To(ext.NewStdoutSink())
+	<-done
+	if ie != nil {
+		return ie
+	}
+	return nil
 }

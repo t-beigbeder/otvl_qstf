@@ -35,7 +35,7 @@ func NewWriterSink[T any](writer io.WriteCloser, elWriter ElementWriter[T]) (*Wr
 }
 
 func (ws *WriterSink[T]) init() {
-	// FIXME: close and type conversion errors to be notified
+	// FIXME: write, close and type conversion errors to be notified
 	go func() {
 		defer ws.writer.Close()
 		defer close(ws.done)
