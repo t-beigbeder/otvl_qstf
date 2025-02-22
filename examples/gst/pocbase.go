@@ -1,13 +1,17 @@
 package gst
 
 import (
-	"bytes"
 	"errors"
+	"fmt"
 	_ "github.com/reugn/go-streams"
-	"github.com/reugn/go-streams/extension"
 	_ "github.com/reugn/go-streams/extension"
+	ext "github.com/reugn/go-streams/extension"
+	"github.com/reugn/go-streams/flow"
 	_ "github.com/reugn/go-streams/flow"
+	"github.com/t-beigbeder/otvl_qstf/internal/common"
+	"github.com/t-beigbeder/otvl_qstf/internal/gst"
 	"io"
+	"slices"
 )
 
 var hostsCatalogue map[string]Host
@@ -106,33 +110,39 @@ func setupHosts() (Host, Host, Connection, Connection, Stream, Stream) {
 	return h1, h2, c1, c2, s1, s2
 }
 
-func SimpleRoundTrip() {
+func pocDataSet(label string) []byte {
+	return slices.Concat(
+		common.Bs2LBs([]byte(fmt.Sprintf("Start %s!", label))),
+		common.Bs2LBs([]byte(fmt.Sprintf("Continue %s!", label))),
+		common.Bs2LBs([]byte(fmt.Sprintf("Stop %s!", label))),
+	)
+}
+
+// SimpleRoundTrip writes data from source to stream (s1)
+// and reads it in background on other end (s2)
+func SimpleRoundTrip() error {
 	h1, h2, c1, c2, s1, s2 := setupHosts()
 	_, _, _, _, _, _ = h1, h2, c1, c2, s1, s2
-	rs := bytes.NewReader([]byte("hello"))
-	extension.NewReaderSource(rs, func(rr io.Reader) ([]byte, error) {
-		bs := make([]byte, 128)
-		n, err := rr.Read(bs)
-		return bs[:n], err
-	})
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		for {
-			bs := make([]byte, 1024)
-			n, err := s2.GetReader().Read(bs)
-			if err != nil && err != io.EOF {
-				break
-			}
-			println(string(bs[:n]))
-			if err != nil {
-				break
-			}
+	src1 := gst.NewSliceSource(common.Sample("SimpleRoundTrip", true))
+	s1Sink, err := gst.NewWriterSink(s1.GetWriter(), gst.LBsWriter)
+	if err != nil {
+		return err
+	}
+	var intErr error
+	done := common.BgLaunch(func() {
+		src2, err := gst.NewReaderSource(s2.GetReader(), gst.LBsReader)
+		if err != nil {
+			intErr = err
+			return
 		}
-	}()
-	s1.GetWriter().Write([]byte("hello"))
-	s1.GetWriter().Close()
+		sink2 := ext.NewStdoutSink()
+		src2.Via(gst.AsStringFlow()).To(sink2)
+		sink2.AwaitCompletion()
+	})
+	src1.Via(flow.NewPassThrough()).To(s1Sink)
+	s1Sink.AwaitCompletion()
 	<-done
+	return intErr
 }
 
 func StartFuncRoundTrip() {

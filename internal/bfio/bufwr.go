@@ -11,7 +11,7 @@ const MaxBufWriterSize = 8192
 
 type BufWriter interface {
 	Bytes() []byte
-	io.Writer
+	io.WriteCloser
 }
 
 type bufWr struct {
@@ -35,4 +35,8 @@ func NewBufWr() BufWriter {
 
 func (b *bufWr) Bytes() []byte {
 	return b.buf.Bytes()
+}
+
+func (b *bufWr) Close() error {
+	return nil
 }

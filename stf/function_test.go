@@ -63,7 +63,7 @@ func TestTerminable(t *testing.T) {
 
 	is, err := fc.AddInStream(in, IstDiscrete(true),
 		IstBSet(
-			func(_ context.Context, bs []byte) error {
+			func(_ context.Context, bs []byte, _ bool) error {
 				sw.results <- string(bs)
 				time.Sleep(5 * time.Millisecond)
 				return nil
@@ -115,7 +115,7 @@ func TestCloseTerminable(t *testing.T) {
 
 	is, err := fc.AddInStream(in, IstDiscrete(true),
 		IstBSet(
-			func(_ context.Context, bs []byte) error {
+			func(_ context.Context, bs []byte, _ bool) error {
 				sw.results <- string(bs)
 				time.Sleep(5 * time.Millisecond)
 				return nil

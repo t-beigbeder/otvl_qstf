@@ -3,9 +3,7 @@ package gst
 import (
 	"bytes"
 	ext "github.com/reugn/go-streams/extension"
-	"github.com/reugn/go-streams/flow"
 	"github.com/stretchr/testify/require"
-	"github.com/t-beigbeder/otvl_qstf/examples/gst"
 	"github.com/t-beigbeder/otvl_qstf/internal/common"
 	"testing"
 )
@@ -24,10 +22,11 @@ func TestLbsRW(t *testing.T) {
 }
 
 func TestNewReaderSource(t *testing.T) {
-	rr := bytes.NewReader(common.Bs2LBs([]byte("Hello TestNewReaderSource!")))
+	msgsBs := common.LBsSample(t.Name(), false)
+	rr := bytes.NewReader(msgsBs)
 	source, err := NewReaderSource[[]byte](rr, LBsReader)
 	if err != nil {
 		return
 	}
-	source.Via(gst.AsStringFlow()).To(ext.NewStdoutSink())
+	source.Via(AsStringFlow()).To(ext.NewStdoutSink())
 }
