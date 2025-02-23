@@ -1,7 +1,10 @@
 package gst
 
-import "testing"
+import (
+	"context"
+	"testing"
+)
 
 func TestNewQHost(t *testing.T) {
-	setupQHosts()
+	setupQHosts(context.Background())
 }

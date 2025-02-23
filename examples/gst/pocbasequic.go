@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/quic-go/quic-go"
 	"github.com/t-beigbeder/otvl_qstf/internal/netutils"
+	"io"
 	"log/slog"
 	"net"
 )
@@ -17,14 +18,46 @@ func init() {
 
 type qh struct {
 	hostId string
+	ctx    context.Context
 	port   string
 	cns    map[string]Connection
 	cancel context.CancelFunc
+	logger *slog.Logger
 }
 
 var _ Host = (*qh)(nil)
 
-func NewQHost(hostId string) (Host, error) {
+func newQcn(ctx context.Context, cId string, qc quic.Connection, logger *slog.Logger) *qcn {
+	_, lp, _ := net.SplitHostPort(qc.LocalAddr().String())
+	_, rp, _ := net.SplitHostPort(qc.RemoteAddr().String())
+	c := &qcn{
+		sourceId: lp,
+		destId:   rp,
+		qc:       qc,
+		streams:  make(map[string]Stream),
+		logger:   slog.With(logger, "id", cId),
+	}
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				stream, err := qc.AcceptStream(ctx)
+				if err != nil {
+					logger.Error("accepting stream", "err", err)
+					return
+				}
+				logger.Info("accepted stream", "stream", stream.StreamID())
+				_ = stream
+			}
+		}
+	}()
+	return c
+}
+
+func NewQHost(ctx context.Context, hostId string) (Host, error) {
+	logger := netutils.GetLoggerFor(hostId)
 	port, cancel, err := netutils.RunTestServer(
 		"NewQHost", func(ctx context.Context, qc quic.Connection, logger *slog.Logger) {
 			logger.Info("NewQHost accept connection", "localAddr", qc.LocalAddr().String())
@@ -33,25 +66,24 @@ func NewQHost(hostId string) (Host, error) {
 				logger.Error("NewQHost: host not found", "hostId", hostId)
 			}
 			dqh := h.(*qh)
-			_, lp, _ := net.SplitHostPort(qc.LocalAddr().String())
-			_, rp, _ := net.SplitHostPort(qc.RemoteAddr().String())
-			c := &qcn{
-				sourceId: lp,
-				destId:   rp,
-				qc:       qc,
-				streams:  make(map[string]Stream),
+			cId := "host2"
+			if hostId == "host2" {
+				cId = "host1"
 			}
-			dqh.cns[c.destId] = c
+			c := newQcn(ctx, cId, qc, logger)
+			dqh.cns[cId] = c
 
-		}, netutils.GetLoggerFor(hostId))
+		}, logger)
 	if err != nil {
 		return nil, err
 	}
 	h := &qh{
 		hostId: hostId,
+		ctx:    ctx,
 		port:   port,
 		cns:    make(map[string]Connection),
 		cancel: cancel,
+		logger: logger,
 	}
 	qhsCatalogue[hostId] = h
 	return h, nil
@@ -62,9 +94,11 @@ func (h *qh) GetCn(cnId string) Connection {
 }
 
 type qcn struct {
+	ctx              context.Context
 	sourceId, destId string
 	qc               quic.Connection
 	streams          map[string]Stream
+	logger           *slog.Logger
 }
 
 var _ Connection = (*qcn)(nil)
@@ -79,34 +113,51 @@ func (h *qh) Connect(cnId string) (Connection, error) {
 	if err != nil {
 		return nil, err
 	}
-	_, lp, _ := net.SplitHostPort(qc.LocalAddr().String())
-	_, rp, _ := net.SplitHostPort(qc.RemoteAddr().String())
-	c := &qcn{
-		sourceId: lp,
-		destId:   rp,
-		qc:       qc,
-		streams:  make(map[string]Stream),
+	cId := "host2"
+	if h.hostId == "host2" {
+		cId = "host1"
 	}
-	h.cns[rp] = c
+	c := newQcn(h.ctx, cId, qc, h.logger)
+	h.cns[cId] = c
 	return c, nil
 }
 
-func (q qcn) OpenStream(streamId string) (Stream, error) {
-	//TODO implement me
-	panic("implement me")
+func (q *qcn) OpenStream(streamId string) (Stream, error) {
+	wcr, err := q.qc.OpenStream()
+	if err != nil {
+		return nil, err
+	}
+	qs := &qst{wcr: wcr}
+	q.streams[streamId] = qs
+	return qs, nil
 }
 
-func (q qcn) GetStream(streamId string) Stream {
-	//TODO implement me
-	panic("implement me")
+func (q *qcn) GetStream(streamId string) Stream {
+	return q.streams[streamId]
 }
 
-func setupQHosts() (Host, Host, Connection, Connection, Stream, Stream) {
-	h1, err := NewQHost("host1")
+type qst struct {
+	isIn bool
+	rr   io.Reader
+	wcr  io.WriteCloser
+}
+
+var _ Stream = (*qst)(nil)
+
+func (q *qst) GetReader() io.Reader {
+	return q.rr
+}
+
+func (q *qst) GetWriter() io.WriteCloser {
+	return q.wcr
+}
+
+func setupQHosts(ctx context.Context) (Host, Host, Connection, Connection, Stream, Stream) {
+	h1, err := NewQHost(ctx, "host1")
 	if err != nil {
 		panic(err)
 	}
-	h2, err := NewQHost("host2")
+	h2, err := NewQHost(ctx, "host2")
 	if err != nil {
 		panic(err)
 	}
@@ -114,7 +165,10 @@ func setupQHosts() (Host, Host, Connection, Connection, Stream, Stream) {
 	if err != nil {
 		panic(err)
 	}
-	c2 := h2.GetCn("host1")
+	s1a, _ := c1.OpenStream("simple1a")
 
-	return h1, h2, c1, c2, nil, nil
+	c2 := h2.GetCn("host1")
+	s2a := c1.GetStream("simple1a")
+
+	return h1, h2, c1, c2, s1a, s2a
 }
