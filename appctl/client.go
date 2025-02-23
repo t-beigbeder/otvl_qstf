@@ -661,7 +661,7 @@ func NewAppClient(pCtx context.Context, sAddr string, logger *slog.Logger) (AppC
 		qc  quic.Connection
 		err error
 	)
-	qc, err = netutils.GetQuicConn(sAddr, QstfAlpn)
+	qc, err = netutils.GetQuicConn(sAddr, QstfAlpn, 0)
 	if err != nil {
 		return nil, err
 	}

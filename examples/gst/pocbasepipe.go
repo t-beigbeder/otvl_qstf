@@ -20,7 +20,7 @@ type pph struct {
 
 var _ Host = (*pph)(nil)
 
-func NewHost(hostId string) Host {
+func NewPPHost(hostId string) Host {
 	pphsCatalogue[hostId] = &pph{hostId: hostId, cns: make(map[string]Connection)}
 	return pphsCatalogue[hostId]
 }
@@ -70,9 +70,9 @@ func (s *ppst) GetWriter() io.WriteCloser {
 	return s.wcr
 }
 
-func setupHosts() (Host, Host, Connection, Connection, Stream, Stream) {
-	h1 := NewHost("host1")
-	h2 := NewHost("host2")
+func setupPPHosts() (Host, Host, Connection, Connection, Stream, Stream) {
+	h1 := NewPPHost("host1")
+	h2 := NewPPHost("host2")
 	c1, _ := h1.Connect("host2")
 	c2 := h2.GetCn("host1")
 	s1a, _ := c1.OpenStream("simple1a")

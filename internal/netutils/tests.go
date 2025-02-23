@@ -19,27 +19,45 @@ func RunTestServer(alpn string,
 		cancel()
 		return "", nil, err
 	}
-	var port string
+	var (
+		host, port string
+	)
 	go func() {
 		logger := logger
-		listener, host, iport, ierr := GetQuicListener(":0", cert, alpn, logger)
-		fmt.Fprintf(os.Stderr, "RunTestServer: listening on %s:%s\n", host, iport)
+		listener, ihost, iport, ierr := GetQuicListener(":0", cert, alpn, logger)
+		logger.Info("RunTestServer: listening", "host", ihost, "port", iport)
 		if ierr != nil {
 			err = ierr
 			return
 		}
-		port = iport
+		host, port = ihost, iport
+		var checked bool
 		for {
 			cnc, ierr := listener.Accept(ctx)
 			if ierr != nil {
-				fmt.Fprintf(os.Stderr, "RunTestServer: error accepting connection: %s\n", ierr)
+				logger.Error("RunTestServer: accept error", "host", host, "port", iport, "err", ierr)
 				return
 			}
-			fmt.Fprintf(os.Stderr, "RunTestServer: new connection: %s\n", cnc.RemoteAddr().String())
-			doer(ctx, cnc, logger)
+			logger.Info("RunTestServer: accepted connection", "host", host, "port", iport, "remoteAddr", cnc.RemoteAddr().String())
+			if checked {
+				doer(ctx, cnc, logger)
+			} else {
+				checked = true
+			}
 		}
 	}()
-	time.Sleep(100 * time.Millisecond)
+	ready := err != nil
+	for cc := 0; cc < 3 && !ready; cc++ {
+		timeout := time.Duration(10*(cc+1)) * time.Millisecond
+		ccn, ierr := GetQuicConn(fmt.Sprintf("%s:%s", "localhost", port), alpn, timeout)
+		if ierr == nil {
+			ccn.CloseWithError(0, "")
+			ready = true
+		}
+	}
+	if !ready && err == nil {
+		err = fmt.Errorf("RunTestServer: failed to connect to %s:%s", host, port)
+	}
 	if err != nil {
 		cancel()
 		return "", nil, err

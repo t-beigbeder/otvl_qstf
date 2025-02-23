@@ -24,7 +24,7 @@ func pocDataSet(label string) []byte {
 // SimpleRoundTrip writes data from source to stream (s1)
 // and reads it in background on other end (s2)
 func SimpleRoundTrip() error {
-	h1, h2, c1, c2, s1, s2 := setupHosts()
+	h1, h2, c1, c2, s1, s2 := setupPPHosts()
 	_, _, _, _, _, _ = h1, h2, c1, c2, s1, s2
 	src1 := gst.NewSliceSource(common.Sample("SimpleRoundTrip", true))
 	s1Sink, err := gst.NewWriterSink(s1.GetWriter(), gst.LBsWriter)
@@ -52,7 +52,7 @@ func SimpleRoundTrip() error {
 }
 
 func LargeRoundTrip() error {
-	h1, h2, c1, c2, s1a, s2a := setupHosts()
+	h1, h2, c1, c2, s1a, s2a := setupPPHosts()
 	_, _, _, _, _, _ = h1, h2, c1, c2, s1a, s2a
 	src1 := gst.NewSliceSource(common.LargeSample("LargeRoundTrip"))
 	s1Sink, err := gst.NewWriterSink(s1a.GetWriter(), gst.LBsWriter)
@@ -80,7 +80,7 @@ func LargeRoundTrip() error {
 }
 
 func TwoReadersRoundTrip() error {
-	h1, h2, c1, c2, s1, s2 := setupHosts()
+	h1, h2, c1, c2, s1, s2 := setupPPHosts()
 	_, _, _, _, _, _ = h1, h2, c1, c2, s1, s2
 	src1 := gst.NewSliceSource(common.Sample("TwoReadersRoundTrip", true))
 	s1Sink, err := gst.NewWriterSink(s1.GetWriter(), gst.LBsWriter)
@@ -117,7 +117,7 @@ func TwoReadersRoundTrip() error {
 }
 
 func SimuFuncRoundTrip() error {
-	h1, h2, c1, c2, s1a, s2a := setupHosts()
+	h1, h2, c1, c2, s1a, s2a := setupPPHosts()
 	_, _, _, _, _, _ = h1, h2, c1, c2, s1a, s2a
 	src1 := gst.NewSliceSource(common.Sample("SimuFuncRoundTrip", true))
 	s1Sink, err := gst.NewWriterSink(s1a.GetWriter(), gst.LBsWriter)

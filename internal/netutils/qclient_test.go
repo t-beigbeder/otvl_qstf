@@ -17,7 +17,7 @@ func TestGetQuicConn(t *testing.T) {
 	}, GetLoggerFor("server"))
 	require.NoError(t, err)
 	defer cancel()
-	cnc, err := GetQuicConn("localhost:"+port, "TestGetQuicConn")
+	cnc, err := GetQuicConn("localhost:"+port, "TestGetQuicConn", 0)
 	require.NoError(t, err)
 	time.Sleep(100 * time.Millisecond)
 	err = cnc.CloseWithError(0, "no issue")

@@ -7,8 +7,11 @@ import (
 	"time"
 )
 
-func GetQuicConn(addr string, alpn string) (quic.Connection, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+func GetQuicConn(addr string, alpn string, timeout time.Duration) (quic.Connection, error) {
+	if timeout == 0 {
+		timeout = time.Second * 3
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	conn, err := quic.DialAddr(ctx, addr,
 		GetUnsafeTlsConfigClient(alpn), // TODO: configure TLS
