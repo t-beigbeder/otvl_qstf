@@ -65,7 +65,7 @@ func LargeRoundTrip() error {
 		if err != nil {
 			return err
 		}
-		sink2 := ext.NewFileSink("/dev/null")
+		sink2 := ext.NewFileSink("/tmp/LargeRoundTrip.txt")
 		src2.Via(gst.AsStringFlow()).To(sink2)
 		sink2.AwaitCompletion()
 		return nil
