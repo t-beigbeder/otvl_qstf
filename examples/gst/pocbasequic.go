@@ -12,7 +12,6 @@ import (
 	"io"
 	"log/slog"
 	"net"
-	"time"
 )
 
 var qhsCatalogue map[string]Host
@@ -202,7 +201,9 @@ func setupQHosts(ctx context.Context, d1, d2 qsDoer) (Host, Host, error) {
 // SimpleQuicRoundTrip writes data from source to stream (s1)
 // and reads it in background on other end (s2)
 func SimpleQuicRoundTrip() error {
+	done := make(chan struct{})
 	var h2Doer = func(ctx context.Context, s2 Stream) error {
+		defer close(done)
 		src2, err := gst.NewReaderSource(s2.GetReader(), gst.LBsReader)
 		if err != nil {
 			return err
@@ -224,12 +225,14 @@ func SimpleQuicRoundTrip() error {
 		return err
 	}
 	src1.Via(flow.NewPassThrough()).To(s1Sink)
-	time.Sleep(time.Millisecond * 20)
+	<-done
 	return nil
 }
 
 func LargeQuicRoundTrip() error {
+	done := make(chan struct{})
 	var h2Doer = func(ctx context.Context, s2 Stream) error {
+		defer close(done)
 		src2, err := gst.NewReaderSource(s2.GetReader(), gst.LBsReader)
 		if err != nil {
 			return err
@@ -251,12 +254,14 @@ func LargeQuicRoundTrip() error {
 		return err
 	}
 	src1.Via(flow.NewPassThrough()).To(s1Sink)
-	time.Sleep(time.Millisecond * 20)
+	<-done
 	return nil
 }
 
 func TwoReadersQuicRoundTrip() error {
+	done := make(chan struct{})
 	var h2Doer = func(ctx context.Context, s2 Stream) error {
+		defer close(done)
 		src2, err := gst.NewReaderSource(s2.GetReader(), gst.LBsReader)
 		if err != nil {
 			return err
@@ -288,7 +293,7 @@ func TwoReadersQuicRoundTrip() error {
 		return err
 	}
 	src1.Via(flow.NewPassThrough()).To(s1Sink)
-	time.Sleep(time.Millisecond * 20)
+	<-done
 	return nil
 }
 
@@ -316,7 +321,9 @@ func SimuFuncQuicRoundTrip() error {
 
 		return nil
 	}
+	done := make(chan struct{})
 	var h1Doer = func(ctx context.Context, s2b Stream) error {
+		defer close(done)
 		src2b, err := gst.NewReaderSource(s2b.GetReader(), gst.LBsReader)
 		if err != nil {
 			return err
@@ -338,8 +345,7 @@ func SimuFuncQuicRoundTrip() error {
 	s1Sink, err := gst.NewWriterSink(s1a.GetWriter(), gst.LBsWriter)
 
 	src1.Via(flow.NewPassThrough()).To(s1Sink)
-
-	time.Sleep(time.Millisecond * 20)
+	defer close(done)
 	return nil
 }
 
@@ -367,7 +373,9 @@ func SimuFuncQuicLargeRoundTrip() error {
 
 		return nil
 	}
+	done := make(chan struct{})
 	var h1Doer = func(ctx context.Context, s2b Stream) error {
+		defer close(done)
 		src2b, err := gst.NewReaderSource(s2b.GetReader(), gst.LBsReader)
 		if err != nil {
 			return err
@@ -389,7 +397,6 @@ func SimuFuncQuicLargeRoundTrip() error {
 	s1Sink, err := gst.NewWriterSink(s1a.GetWriter(), gst.LBsWriter)
 
 	src1.Via(flow.NewPassThrough()).To(s1Sink)
-
-	time.Sleep(time.Millisecond * 40)
+	<-done
 	return nil
 }
