@@ -82,6 +82,7 @@ func Encrypt(dst io.Writer, srs ...string) (io.WriteCloser, error) {
 	}
 	return age.Encrypt(dst, rs...)
 }
+
 func Decrypt(src io.Reader, sids ...string) (io.Reader, error) {
 	var ids []age.Identity
 	for _, sid := range sids {
