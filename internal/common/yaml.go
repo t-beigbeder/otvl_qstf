@@ -6,6 +6,7 @@ import (
 	"os"
 )
 
+// YamlLoad opens the file with provided path and unmarshal its yaml content to the value val with provided address.
 func YamlLoad(path string, val interface{}) error {
 	f, err := os.Open(path)
 	if err != nil {
@@ -23,6 +24,7 @@ func YamlLoad(path string, val interface{}) error {
 	return nil
 }
 
+// YamlStore marshals the provided value val as yaml and stores it as file with provided path.
 func YamlStore(path string, val interface{}) error {
 	y, err := yaml.Marshal(val)
 	if err != nil {

@@ -9,6 +9,7 @@ import (
 
 const MaxBufWriterSize = 8192
 
+// BufWriter implements an in-memory WriteCloser for use in case of testing.
 type BufWriter interface {
 	Bytes() []byte
 	io.WriteCloser
