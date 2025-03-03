@@ -12,10 +12,7 @@ import (
 	"time"
 )
 
-// https://go.dev/src/crypto/tls/generate_cert.go
-// /usr/local/go/src/crypto/tlsutils/generate_cert.go
-// https://pkg.go.dev/crypto/tls#example-X509KeyPair
-
+// SelfSigned generates a new self-signed TLS certificate key pair for the given host
 func SelfSigned(host string) (*tls.Certificate, error) {
 	priv, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {

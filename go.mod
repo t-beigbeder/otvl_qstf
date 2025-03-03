@@ -3,13 +3,14 @@ module github.com/t-beigbeder/otvl_qstf
 go 1.23.4
 
 require (
+	filippo.io/age v1.2.1
 	github.com/quic-go/quic-go v0.48.2
-	github.com/stretchr/testify v1.9.0
 	github.com/reugn/go-streams v0.11.0
+	github.com/stretchr/testify v1.9.0
+	github.com/urfave/cli/v2 v2.27.5
 )
 
 require (
-	filippo.io/age v1.2.1 // indirect
 	filippo.io/edwards25519 v1.1.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/francoispqt/gojay v1.2.13 // indirect
@@ -28,6 +29,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace (
-	github.com/reugn/go-streams => ../../foss/go-streams
-)
+replace github.com/reugn/go-streams => ../../foss/go-streams
