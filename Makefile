@@ -6,5 +6,10 @@ help:	## show this help
 test:	## go test the application
 	go test ./...
 .PHONY: build
-build:	## go build the application
+build: build-all build-test	## go build the application
+.PHONY: build-all
+build-all:	## go build all
 	go build ./...
+.PHONY: build-test
+build-test:	## go build the test application
+	go build -o build/test cmd/test/main.go

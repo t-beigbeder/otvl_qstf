@@ -1,6 +1,9 @@
 package main
 
 import (
+	"fmt"
+	"github.com/t-beigbeder/otvl_qstf/internal/common"
+	"github.com/t-beigbeder/otvl_qstf/internal/netutils"
 	"github.com/urfave/cli/v2"
 	"log"
 	"os"
@@ -32,29 +35,47 @@ func getClientCmd() *cli.Command {
 		},
 		Flags: getClientFlags(),
 		Action: func(cc *cli.Context) error {
-			err := provisioner.RunPhase0(cc.App.Metadata["cd"].(string), cc.App.Metadata["hns"].([]string))
+			var err error
+			fmt.Fprintf(os.Stdout, "client %s\n", cc.String("address"))
 			return err
 		},
 	}
 }
 
 func getClientFlags() []cli.Flag {
+	return append([]cli.Flag{
+		&cli.StringFlag{
+			Name: "address", Aliases: []string{"a"},
+			Required: true,
+			Usage:    "host:port of the QUIC server",
+			Action: func(cc *cli.Context, addr string) error {
+				_, _, err := netutils.GetIPPort(addr)
+				return err
+			},
+		},
+	}, getTlsFlags()...)
+}
+
+func getTlsFlags() []cli.Flag {
 	return []cli.Flag{
-		&cli.StringSliceFlag{
-			Name:  "hosts",
-			Usage: "names of hosts to be installed",
-			Action: func(cc *cli.Context, hns []string) error {
-				cc.App.Metadata["hns"] = hns
-				return nil
+		&cli.StringFlag{
+			Name: "cert",
+			Action: func(cc *cli.Context, p string) error {
+				return checkPath("cert", p)
 			},
 		},
 		&cli.StringFlag{
-			Name:  "cd",
-			Usage: "configuration directory, defaults to .conf/.bssms",
-			Action: func(cc *cli.Context, cd string) error {
-				cc.App.Metadata["cd"] = cd
-				return nil
+			Name: "key",
+			Action: func(cc *cli.Context, p string) error {
+				return checkPath("key", p)
 			},
 		},
 	}
+}
+
+func checkPath(kind, path string) error {
+	if !common.FileExists(path) {
+		return fmt.Errorf("%s file %s does not exist", kind, path)
+	}
+	return nil
 }
