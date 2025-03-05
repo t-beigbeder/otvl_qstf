@@ -2,6 +2,9 @@ package quic
 
 // TlsOptions can be used to configure TLS on the client or the server
 type TlsOptions struct {
+	// InsecureSkipVerify skips server certificate check
+	InsecureSkipVerify bool
+
 	// SelfSigned enables to generate a self-signed key pair certificate
 	GenSelfSigned bool
 

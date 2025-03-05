@@ -11,7 +11,7 @@ import (
 
 func main() {
 	app := &cli.App{
-		Name:  "bssms",
+		Name:  "test",
 		Usage: "use one subcommand",
 		Commands: []*cli.Command{
 			getClientCmd(),
@@ -58,6 +58,18 @@ func getClientFlags() []cli.Flag {
 
 func getTlsFlags() []cli.Flag {
 	return []cli.Flag{
+		&cli.BoolFlag{
+			Name:  "insecure",
+			Usage: "skip tls verification, insecure!",
+		},
+		&cli.BoolFlag{
+			Name:  "self",
+			Usage: "generate on the fly a self-signed certificate",
+		},
+		&cli.StringFlag{
+			Name:  "self-host",
+			Usage: "host for the self-signed certificate",
+		},
 		&cli.StringFlag{
 			Name: "cert",
 			Action: func(cc *cli.Context, p string) error {
