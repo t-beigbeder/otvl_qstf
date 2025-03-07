@@ -49,7 +49,7 @@ func RunTestServer(alpn string,
 	ready := err != nil
 	for cc := 0; cc < 3 && !ready; cc++ {
 		timeout := time.Duration(10*(cc+1)) * time.Millisecond
-		ccn, ierr := GetQuicConn(fmt.Sprintf("%s:%s", "localhost", port), alpn, timeout)
+		ccn, ierr := NewQuicConn(fmt.Sprintf("%s:%s", "localhost", port), timeout, nil, []string{alpn}, nil)
 		if ierr == nil {
 			ccn.CloseWithError(0, "")
 			ready = true

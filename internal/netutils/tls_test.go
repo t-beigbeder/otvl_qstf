@@ -27,7 +27,7 @@ func TestSelfSigned(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 	hc := http.Client{
 		Transport: &http.Transport{
-			TLSClientConfig: GetUnsafeTlsConfigClient(""),
+			TLSClientConfig: GetUnsafeTlsConfigClient([]string{}),
 		},
 	}
 	get, err := hc.Get("https://localhost:9443")
