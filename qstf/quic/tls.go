@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"github.com/quic-go/quic-go"
 	"github.com/t-beigbeder/otvl_qstf/internal/netutils"
+	"time"
 )
 
 // TlsOptions can be used to configure TLS on the client or the server
@@ -28,16 +29,25 @@ type TlsOptions struct {
 type QuicOptions struct {
 	// Some options are client or server specific
 	IsServer bool
-	//
-	TlsOptions
+	// ALPN protocol names, nil is OK for HTTPS TLS handshake
 	Alpns []string
+	// sends keep alive packets if period set, see quic.Config
+	KeepAlivePeriod time.Duration
+	// TLS options
+	TlsOptions
 }
 
 // GetConfig provides the TLS and QUIC configuration according to the given options
 func GetConfig(qo *QuicOptions) (tc *tls.Config, qc *quic.Config, err error) {
 	if !qo.IsServer && qo.InsecureSkipVerify {
 		tc = netutils.GetUnsafeTlsConfigClient(qo.Alpns)
-		qc = &quic.Config{}
+	}
+	if qo.IsServer {
+
+	}
+	qc = &quic.Config{}
+	if qo.KeepAlivePeriod != 0 {
+		qc.KeepAlivePeriod = qo.KeepAlivePeriod
 	}
 	return
 }
