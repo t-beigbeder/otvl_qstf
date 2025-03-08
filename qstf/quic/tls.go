@@ -2,9 +2,12 @@ package quic
 
 import (
 	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"github.com/quic-go/quic-go"
+	"github.com/t-beigbeder/otvl_qstf/internal/common"
 	"github.com/t-beigbeder/otvl_qstf/internal/netutils"
+	"path/filepath"
 	"time"
 )
 
@@ -18,6 +21,9 @@ type TlsOptions struct {
 
 	// SelfSignedHost is the host for which the self-signed certificate is generated, defaults to localhost
 	SelfSignedHost string
+
+	// CACertFile certificate public key file
+	CACertFile string
 
 	// CertFile certificate public key file
 	CertFile string
@@ -41,9 +47,10 @@ type QuicOptions struct {
 // GetConfig provides the TLS and QUIC configuration according to the given options
 func GetConfig(qo *QuicOptions) (*tls.Config, *quic.Config, error) {
 	var (
-		certs []tls.Certificate
-		tc    *tls.Config
-		qc    *quic.Config
+		certs    []tls.Certificate
+		certPool *x509.CertPool
+		tc       *tls.Config
+		qc       *quic.Config
 	)
 	if qo.GenSelfSigned {
 		cert, err := netutils.SelfSigned(qo.SelfSignedHost)
@@ -61,13 +68,26 @@ func GetConfig(qo *QuicOptions) (*tls.Config, *quic.Config, error) {
 		} else if qo.IsServer {
 			return nil, nil, errors.New("TLS server certificate is not provided")
 		}
+		if qo.TlsOptions.CACertFile != "" {
+			caPEM, err := common.LoadFile(filepath.Join(qo.TlsOptions.CACertFile))
+			if err != nil {
+				return nil, nil, err
+			}
+			certPool = x509.NewCertPool()
+			certPool.AppendCertsFromPEM(caPEM)
+		}
 	}
-	if !qo.IsServer && qo.InsecureSkipVerify {
-		tc = &tls.Config{InsecureSkipVerify: true, NextProtos: qo.Alpns, Certificates: certs}
+	if !qo.IsServer {
+		if qo.InsecureSkipVerify {
+			tc = &tls.Config{InsecureSkipVerify: true, NextProtos: qo.Alpns, Certificates: certs}
+		} else {
+			tc = &tls.Config{NextProtos: qo.Alpns, Certificates: certs, RootCAs: certPool}
+		}
 		qc = &quic.Config{KeepAlivePeriod: qo.KeepAlivePeriod}
 	}
 	if qo.IsServer {
-
+		tc = &tls.Config{NextProtos: qo.Alpns, Certificates: certs}
+		qc = &quic.Config{KeepAlivePeriod: qo.KeepAlivePeriod}
 	}
 	qc = &quic.Config{}
 	if qo.KeepAlivePeriod != 0 {

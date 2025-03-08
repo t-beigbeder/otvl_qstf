@@ -100,6 +100,10 @@ func NewCaCert() (*x509.CertPool, *x509.Certificate, *rsa.PrivateKey, error) {
 	if err != nil {
 		return nil, nil, nil, err
 	}
+	caCert, err = x509.ParseCertificate(caBytes)
+	if err != nil {
+		return nil, nil, nil, err
+	}
 	caPEM := new(bytes.Buffer)
 	pem.Encode(caPEM, &pem.Block{
 		Type:  "CERTIFICATE",
@@ -117,13 +121,9 @@ func NewCaCertFiles(certFile, keyFile string) error {
 		return err
 	}
 	caPEM := new(bytes.Buffer)
-	caBytes, err := x509.CreateCertificate(rand.Reader, caCert, caCert, &caPrik.PublicKey, caPrik)
-	if err != nil {
-		return err
-	}
 	err = pem.Encode(caPEM, &pem.Block{
 		Type:  "CERTIFICATE",
-		Bytes: caBytes,
+		Bytes: caCert.Raw,
 	})
 	if err != nil {
 		return err
@@ -213,18 +213,14 @@ func NewCertFiles(hosts []string, caCertFile, caKeyFile, certFile, keyFile strin
 	if !ok {
 		return fmt.Errorf("expected RSA private key, got %T", pair.PrivateKey)
 	}
-	cert, err := NewCert(nil, pair.Leaf, caPrik)
-	if err != nil {
-		return err
-	}
-	certBytes, err := x509.CreateCertificate(rand.Reader, cert.Leaf, pair.Leaf, &caPrik.PublicKey, caPrik)
+	cert, err := NewCert(hosts, pair.Leaf, caPrik)
 	if err != nil {
 		return err
 	}
 	certPEM := new(bytes.Buffer)
 	err = pem.Encode(certPEM, &pem.Block{
 		Type:  "CERTIFICATE",
-		Bytes: certBytes,
+		Bytes: cert.Leaf.Raw,
 	})
 	if err != nil {
 		return err
