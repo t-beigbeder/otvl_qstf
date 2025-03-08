@@ -2,9 +2,13 @@ package netutils
 
 import (
 	"context"
+	"crypto/rsa"
 	"crypto/tls"
+	"crypto/x509"
 	"github.com/stretchr/testify/require"
+	"github.com/t-beigbeder/otvl_qstf/internal/common"
 	"net/http"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -72,4 +76,87 @@ func TestNewServerCert(t *testing.T) {
 	if get.StatusCode != http.StatusNotFound {
 		t.Fatalf("status code %d", get.StatusCode)
 	}
+}
+
+func TestNewClientServerCert(t *testing.T) {
+	pool, caCert, caPrik, err := NewCaCert()
+	require.NoError(t, err)
+	sCert, err := NewCert([]string{"0.0.0.0", "localhost"}, caCert, caPrik)
+	require.NoError(t, err)
+	cCert, err := NewCert(nil, caCert, caPrik)
+	require.NoError(t, err)
+
+	cfg := &tls.Config{
+		Certificates: []tls.Certificate{*sCert},
+		ClientCAs:    pool,
+		ClientAuth:   tls.RequireAndVerifyClientCert,
+	}
+	srv := &http.Server{
+		Addr:         "0.0.0.0:9443",
+		TLSConfig:    cfg,
+		ReadTimeout:  time.Minute,
+		WriteTimeout: time.Minute,
+	}
+	go func() {
+		_ = srv.ListenAndServeTLS("", "")
+	}()
+	defer func() { _ = srv.Shutdown(context.TODO()) }()
+	time.Sleep(200 * time.Millisecond)
+	hc := http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				Certificates: []tls.Certificate{*cCert},
+				RootCAs:      pool,
+			},
+		},
+	}
+	get, err := hc.Get("https://localhost:9443")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if get.StatusCode != http.StatusNotFound {
+		t.Fatalf("status code %d", get.StatusCode)
+	}
+}
+
+func TestNewCaCertFiles(t *testing.T) {
+	td := t.TempDir()
+	err := NewCaCertFiles(
+		filepath.Join(td, "cacert.pem"),
+		filepath.Join(td, "cacert-key.pem"))
+	require.NoError(t, err)
+	pair, err := tls.LoadX509KeyPair(filepath.Join(td, "cacert.pem"), filepath.Join(td, "cacert-key.pem"))
+	require.NoError(t, err)
+	_ = pair
+	caPrik, ok := pair.PrivateKey.(*rsa.PrivateKey)
+	require.True(t, ok)
+	cert, err := NewCert(nil, pair.Leaf, caPrik)
+	require.NoError(t, err)
+	_ = cert
+	caPEM, err := common.LoadFile(filepath.Join(td, "cacert.pem"))
+	require.NoError(t, err)
+	certpool := x509.NewCertPool()
+	ok = certpool.AppendCertsFromPEM(caPEM)
+	require.True(t, ok)
+}
+
+func TestNewCertFiles(t *testing.T) {
+	td := t.TempDir()
+	err := NewCaCertFiles(
+		filepath.Join(td, "cacert.pem"),
+		filepath.Join(td, "cacert-key.pem"))
+	require.NoError(t, err)
+	err = NewCertFiles(nil,
+		filepath.Join(td, "cacert.pem"),
+		filepath.Join(td, "cacert-key.pem"),
+		filepath.Join(td, "cert.pem"),
+		filepath.Join(td, "cert-key.pem"),
+	)
+	require.NoError(t, err)
+	pair, err := tls.LoadX509KeyPair(
+		filepath.Join(td, "cert.pem"),
+		filepath.Join(td, "cert-key.pem"),
+	)
+	require.NoError(t, err)
+	_ = pair
 }

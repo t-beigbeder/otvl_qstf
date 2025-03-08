@@ -8,6 +8,8 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"fmt"
+	"github.com/t-beigbeder/otvl_qstf/internal/common"
 	"math/big"
 	"net"
 	"time"
@@ -70,6 +72,7 @@ func getRandSN() (*big.Int, error) {
 	return serialNumber, nil
 }
 
+// NewCaCert generates a private CA for tests
 func NewCaCert() (*x509.CertPool, *x509.Certificate, *rsa.PrivateKey, error) {
 	notBefore := time.Now()
 	notAfter := notBefore.Add(365 * 24 * time.Hour)
@@ -107,6 +110,44 @@ func NewCaCert() (*x509.CertPool, *x509.Certificate, *rsa.PrivateKey, error) {
 	return certpool, caCert, caPrivKey, nil
 }
 
+// NewCaCertFiles generate a private CA PEM files for tests
+func NewCaCertFiles(certFile, keyFile string) error {
+	_, caCert, caPrik, err := NewCaCert()
+	if err != nil {
+		return err
+	}
+	caPEM := new(bytes.Buffer)
+	caBytes, err := x509.CreateCertificate(rand.Reader, caCert, caCert, &caPrik.PublicKey, caPrik)
+	if err != nil {
+		return err
+	}
+	err = pem.Encode(caPEM, &pem.Block{
+		Type:  "CERTIFICATE",
+		Bytes: caBytes,
+	})
+	if err != nil {
+		return err
+	}
+	err = common.WriteFile(certFile, caPEM.Bytes())
+	if err != nil {
+		return err
+	}
+	caPrivKeyPEM := new(bytes.Buffer)
+	err = pem.Encode(caPrivKeyPEM, &pem.Block{
+		Type:  "RSA PRIVATE KEY",
+		Bytes: x509.MarshalPKCS1PrivateKey(caPrik),
+	})
+	if err != nil {
+		return err
+	}
+	err = common.WriteFile(keyFile, caPrivKeyPEM.Bytes())
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// NewCert generates a client or server (given hosts) certificate from the given CA
 func NewCert(hosts []string, caCert *x509.Certificate, caPrivKey *rsa.PrivateKey) (*tls.Certificate, error) {
 	notBefore := time.Now()
 	notAfter := notBefore.Add(365 * 24 * time.Hour)
@@ -160,6 +201,57 @@ func NewCert(hosts []string, caCert *x509.Certificate, caPrivKey *rsa.PrivateKey
 		return nil, err
 	}
 	return &tlsCert, nil
+}
+
+// NewCertFiles generates a client or server (given hosts) certificate files from the given CA
+func NewCertFiles(hosts []string, caCertFile, caKeyFile, certFile, keyFile string) error {
+	pair, err := tls.LoadX509KeyPair(caCertFile, caKeyFile)
+	if err != nil {
+		return err
+	}
+	caPrik, ok := pair.PrivateKey.(*rsa.PrivateKey)
+	if !ok {
+		return fmt.Errorf("expected RSA private key, got %T", pair.PrivateKey)
+	}
+	cert, err := NewCert(nil, pair.Leaf, caPrik)
+	if err != nil {
+		return err
+	}
+	certBytes, err := x509.CreateCertificate(rand.Reader, cert.Leaf, pair.Leaf, &caPrik.PublicKey, caPrik)
+	if err != nil {
+		return err
+	}
+	certPEM := new(bytes.Buffer)
+	err = pem.Encode(certPEM, &pem.Block{
+		Type:  "CERTIFICATE",
+		Bytes: certBytes,
+	})
+	if err != nil {
+		return err
+	}
+	err = common.WriteFile(certFile, certPEM.Bytes())
+	if err != nil {
+		return err
+	}
+
+	certPrivKeyPEM := new(bytes.Buffer)
+	certPrik, ok := cert.PrivateKey.(*rsa.PrivateKey)
+	if !ok {
+		return fmt.Errorf("expected RSA private key, got %T", cert.PrivateKey)
+	}
+	err = pem.Encode(certPrivKeyPEM, &pem.Block{
+		Type:  "RSA PRIVATE KEY",
+		Bytes: x509.MarshalPKCS1PrivateKey(certPrik),
+	})
+	if err != nil {
+		return err
+	}
+	err = common.WriteFile(keyFile, certPrivKeyPEM.Bytes())
+	if err != nil {
+		return err
+	}
+	return nil
+
 }
 
 func NextProtosFor(alpn string) []string {
