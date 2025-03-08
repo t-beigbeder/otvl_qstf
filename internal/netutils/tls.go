@@ -60,8 +60,9 @@ func SelfSigned(host string) (*tls.Certificate, error) {
 	return &cert, err
 }
 
-// GetUnsafeTlsConfigClient provides an insecure (no certificate check)
-// client TLS configuration to connect to the given protocols ALPNs
-func GetUnsafeTlsConfigClient(alpns []string) *tls.Config {
-	return &tls.Config{InsecureSkipVerify: true, Certificates: nil, NextProtos: alpns}
+func NextProtosFor(alpn string) []string {
+	if alpn == "" {
+		return nil
+	}
+	return []string{alpn}
 }

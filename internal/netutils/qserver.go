@@ -21,7 +21,7 @@ func GetQuicListener(addr string, cert *tls.Certificate, alpn string, logger *sl
 	qc := quic.Config{Tracer: qlog.DefaultConnectionTracer}
 	tc := tls.Config{
 		Certificates: []tls.Certificate{*cert},
-		NextProtos:   []string{alpn},
+		NextProtos:   NextProtosFor(alpn),
 		GetConfigForClient: func(info *tls.ClientHelloInfo) (*tls.Config, error) {
 			if logger != nil {
 				logger.Info("connection", "ServerName", info.ServerName, "SupportedProtos", info.SupportedProtos)

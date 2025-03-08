@@ -2,6 +2,7 @@ package quic
 
 import (
 	"crypto/tls"
+	"errors"
 	"github.com/quic-go/quic-go"
 	"github.com/t-beigbeder/otvl_qstf/internal/netutils"
 	"time"
@@ -38,9 +39,32 @@ type QuicOptions struct {
 }
 
 // GetConfig provides the TLS and QUIC configuration according to the given options
-func GetConfig(qo *QuicOptions) (tc *tls.Config, qc *quic.Config, err error) {
+func GetConfig(qo *QuicOptions) (*tls.Config, *quic.Config, error) {
+	var (
+		certs []tls.Certificate
+		tc    *tls.Config
+		qc    *quic.Config
+	)
+	if qo.GenSelfSigned {
+		cert, err := netutils.SelfSigned(qo.SelfSignedHost)
+		if err != nil {
+			return nil, nil, err
+		}
+		certs = []tls.Certificate{*cert}
+	} else {
+		if qo.TlsOptions.CertFile != "" || qo.TlsOptions.KeyFile != "" {
+			cert, err := tls.LoadX509KeyPair(qo.TlsOptions.CertFile, qo.TlsOptions.KeyFile)
+			if err != nil {
+				return nil, nil, err
+			}
+			certs = []tls.Certificate{cert}
+		} else if qo.IsServer {
+			return nil, nil, errors.New("TLS server certificate is not provided")
+		}
+	}
 	if !qo.IsServer && qo.InsecureSkipVerify {
-		tc = netutils.GetUnsafeTlsConfigClient(qo.Alpns)
+		tc = &tls.Config{InsecureSkipVerify: true, NextProtos: qo.Alpns, Certificates: certs}
+		qc = &quic.Config{KeepAlivePeriod: qo.KeepAlivePeriod}
 	}
 	if qo.IsServer {
 
@@ -49,5 +73,5 @@ func GetConfig(qo *QuicOptions) (tc *tls.Config, qc *quic.Config, err error) {
 	if qo.KeepAlivePeriod != 0 {
 		qc.KeepAlivePeriod = qo.KeepAlivePeriod
 	}
-	return
+	return tc, qc, nil
 }

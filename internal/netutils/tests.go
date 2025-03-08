@@ -2,6 +2,7 @@ package netutils
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"github.com/quic-go/quic-go"
 	"log/slog"
@@ -47,16 +48,19 @@ func RunTestServer(alpn string,
 		}
 	}()
 	ready := err != nil
+	var lastErr error
 	for cc := 0; cc < 3 && !ready; cc++ {
 		timeout := time.Duration(10*(cc+1)) * time.Millisecond
-		ccn, ierr := NewQuicConn(fmt.Sprintf("%s:%s", "localhost", port), timeout, nil, []string{alpn}, nil)
+		tc := &tls.Config{NextProtos: NextProtosFor(alpn), InsecureSkipVerify: true}
+		ccn, ierr := NewQuicConn(fmt.Sprintf("%s:%s", "localhost", port), timeout, tc, nil)
 		if ierr == nil {
 			ccn.CloseWithError(0, "")
 			ready = true
 		}
+		lastErr = ierr
 	}
 	if !ready && err == nil {
-		err = fmt.Errorf("RunTestServer: failed to connect to %s:%s", host, port)
+		err = fmt.Errorf("RunTestServer: failed to connect to %s:%s err %v", host, port, lastErr)
 	}
 	if err != nil {
 		cancel()
