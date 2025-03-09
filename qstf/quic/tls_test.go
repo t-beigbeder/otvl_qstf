@@ -2,6 +2,7 @@ package quic
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"github.com/quic-go/quic-go"
 	"github.com/stretchr/testify/require"
@@ -17,7 +18,9 @@ func TestGetConfigInsecureNoAlpn(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, tc)
 	require.NotNil(t, qc)
-	port, cancel, err := netutils.RunTestServer("", func(ctx context.Context, cn quic.Connection, _ *slog.Logger) {
+	cert, err := netutils.SelfSigned("localhost")
+	require.NoError(t, err)
+	port, cancel, err := netutils.RunTestServer("", cert, func(ctx context.Context, cn quic.Connection, _ *slog.Logger) {
 		fmt.Fprintf(os.Stderr, "TestGetConfigInsecureNoAlpn: %s\n", cn.LocalAddr().String())
 	}, netutils.GetLoggerFor("server"))
 	require.NoError(t, err)
@@ -35,7 +38,9 @@ func TestGetConfigInsecureAlpn(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, tc)
 	require.NotNil(t, qc)
-	port, cancel, err := netutils.RunTestServer("TestGetConfigInsecureAlpn", func(ctx context.Context, cn quic.Connection, _ *slog.Logger) {
+	cert, err := netutils.SelfSigned("localhost")
+	require.NoError(t, err)
+	port, cancel, err := netutils.RunTestServer("TestGetConfigInsecureAlpn", cert, func(ctx context.Context, cn quic.Connection, _ *slog.Logger) {
 		fmt.Fprintf(os.Stderr, "TestGetConfigInsecureAlpn: %s\n", cn.LocalAddr().String())
 	}, netutils.GetLoggerFor("server"))
 	require.NoError(t, err)
@@ -52,7 +57,7 @@ func TestGetConfigSecureAlpn(t *testing.T) {
 		filepath.Join(td, "cacert.pem"),
 		filepath.Join(td, "cacert-key.pem"))
 	require.NoError(t, err)
-	err = netutils.NewCertFiles(nil,
+	err = netutils.NewCertFiles([]string{"localhost"},
 		filepath.Join(td, "cacert.pem"),
 		filepath.Join(td, "cacert-key.pem"),
 		filepath.Join(td, "cert.pem"),
@@ -71,7 +76,12 @@ func TestGetConfigSecureAlpn(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, tc)
 	require.NotNil(t, qc)
-	port, cancel, err := netutils.RunTestServer("TestGetConfigSecureAlpn", func(ctx context.Context, cn quic.Connection, _ *slog.Logger) {
+	cert, err := tls.LoadX509KeyPair(
+		filepath.Join(td, "cert.pem"),
+		filepath.Join(td, "cert-key.pem"),
+	)
+	require.NoError(t, err)
+	port, cancel, err := netutils.RunTestServer("TestGetConfigSecureAlpn", &cert, func(ctx context.Context, cn quic.Connection, _ *slog.Logger) {
 		fmt.Fprintf(os.Stderr, "TestGetConfigSecureAlpn: %s\n", cn.LocalAddr().String())
 	}, netutils.GetLoggerFor("server"))
 	require.NoError(t, err)

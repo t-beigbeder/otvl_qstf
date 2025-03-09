@@ -10,18 +10,16 @@ import (
 	"time"
 )
 
-func RunTestServer(alpn string,
+func RunTestServer(
+	alpn string,
+	cert *tls.Certificate,
 	doer func(ctx context.Context, connection quic.Connection, logger *slog.Logger),
 	logger *slog.Logger,
 ) (string, context.CancelFunc, error) {
 	ctx, cancel := context.WithCancel(context.Background())
-	cert, err := SelfSigned("localhost")
-	if err != nil {
-		cancel()
-		return "", nil, err
-	}
 	var (
 		host, port string
+		err        error
 	)
 	go func() {
 		logger := logger
