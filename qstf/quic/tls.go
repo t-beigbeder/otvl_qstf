@@ -4,9 +4,11 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
+	"fmt"
 	"github.com/quic-go/quic-go"
 	"github.com/t-beigbeder/otvl_qstf/internal/common"
 	"github.com/t-beigbeder/otvl_qstf/internal/netutils"
+	"os"
 	"path/filepath"
 	"time"
 )
@@ -92,7 +94,18 @@ func GetConfig(qo *QuicOptions) (*tls.Config, *quic.Config, error) {
 		tc = &tls.Config{NextProtos: qo.Alpns, Certificates: certs}
 		if qo.ClientAuth {
 			tc.ClientAuth = tls.RequireAndVerifyClientCert
+			tc.ClientAuth = tls.VerifyClientCertIfGiven
 			tc.ClientCAs = certPool
+		}
+		tc.GetConfigForClient = func(info *tls.ClientHelloInfo) (*tls.Config, error) {
+			tmp := info
+			fmt.Fprintf(os.Stderr, "GetConfigForClient %v\n", info)
+			_ = tmp
+			return nil, nil
+		}
+		tc.VerifyPeerCertificate = func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
+			fmt.Fprintf(os.Stderr, "VerifyPeerCertificate\n")
+			return nil
 		}
 		qc = &quic.Config{KeepAlivePeriod: qo.KeepAlivePeriod}
 	}

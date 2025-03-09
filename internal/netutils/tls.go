@@ -63,6 +63,8 @@ func SelfSigned(host string) (*tls.Certificate, error) {
 	return &cert, err
 }
 
+var snCount = 1
+
 func getRandSN() (*big.Int, error) {
 	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
 	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)

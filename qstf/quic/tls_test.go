@@ -96,7 +96,7 @@ func TestGetConfigClientServerAlpn(t *testing.T) {
 	require.NoError(t, err)
 	stc, sqc, err := GetConfig(&QuicOptions{
 		IsServer:   true,
-		TlsOptions: TlsOptions{CertFile: cfs["svc"], KeyFile: cfs["svk"], ClientAuth: true},
+		TlsOptions: TlsOptions{CertFile: cfs["svc"], KeyFile: cfs["svk"], CACertFile: cfs["cac"], ClientAuth: true},
 		Alpns:      netutils.NextProtosFor("TestGetConfigClientServerAlpn"),
 	})
 	require.NotNil(t, stc)
@@ -110,13 +110,13 @@ func TestGetConfigClientServerAlpn(t *testing.T) {
 	defer cancel()
 
 	ctc, cqc, err := GetConfig(&QuicOptions{
-		TlsOptions: TlsOptions{CertFile: cfs["svc"], KeyFile: cfs["svk"], CACertFile: cfs["cac"]},
+		TlsOptions: TlsOptions{CertFile: cfs["clc"], KeyFile: cfs["clk"], CACertFile: cfs["cac"]},
 		Alpns:      netutils.NextProtosFor("TestGetConfigClientServerAlpn"),
 	})
 	require.NoError(t, err)
 	cnc, err := netutils.NewQuicConn("localhost:"+port, 0, ctc, cqc)
 	require.NoError(t, err)
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(2 * time.Second)
 	require.True(t, flag)
 	err = cnc.CloseWithError(0, "no issue")
 	require.NoError(t, err)

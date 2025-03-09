@@ -160,3 +160,49 @@ func TestNewCertFiles(t *testing.T) {
 	require.NoError(t, err)
 	_ = pair
 }
+
+func TestNewClientServerCertFiles(t *testing.T) {
+	td := t.TempDir()
+	cfs, err := NewTestCerts(td, []string{"0.0.0.0", "localhost"})
+	require.NoError(t, err)
+	caPEM, err := common.LoadFile(cfs["cac"])
+	require.NoError(t, err)
+	certPool := x509.NewCertPool()
+	certPool.AppendCertsFromPEM(caPEM)
+	sCert, err := tls.LoadX509KeyPair(cfs["svc"], cfs["svk"])
+	require.NoError(t, err)
+	cCert, err := tls.LoadX509KeyPair(cfs["clc"], cfs["clk"])
+	require.NoError(t, err)
+
+	cfg := &tls.Config{
+		Certificates: []tls.Certificate{sCert},
+		ClientCAs:    certPool,
+		ClientAuth:   tls.RequireAndVerifyClientCert,
+	}
+	srv := &http.Server{
+		Addr:         "0.0.0.0:9443",
+		TLSConfig:    cfg,
+		ReadTimeout:  time.Minute,
+		WriteTimeout: time.Minute,
+	}
+	go func() {
+		_ = srv.ListenAndServeTLS("", "")
+	}()
+	defer func() { _ = srv.Shutdown(context.TODO()) }()
+	time.Sleep(200 * time.Millisecond)
+	hc := http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				Certificates: []tls.Certificate{cCert},
+				RootCAs:      certPool,
+			},
+		},
+	}
+	get, err := hc.Get("https://localhost:9443")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if get.StatusCode != http.StatusNotFound {
+		t.Fatalf("status code %d", get.StatusCode)
+	}
+}

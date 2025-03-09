@@ -69,7 +69,8 @@ func RunQuicTestServer(
 		ctc := &tls.Config{NextProtos: tc.NextProtos, InsecureSkipVerify: true}
 		ccn, ierr := NewQuicConn(fmt.Sprintf("%s:%s", "localhost", port), timeout, ctc, nil)
 		if ierr == nil {
-			ccn.CloseWithError(0, "")
+			ierr2 := ccn.CloseWithError(0, "")
+			_ = ierr2
 			ready = true
 		}
 		lastErr = ierr
