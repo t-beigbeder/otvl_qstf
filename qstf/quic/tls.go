@@ -30,6 +30,9 @@ type TlsOptions struct {
 
 	// KeyFile certificate private key file
 	KeyFile string
+
+	// ClientAuth requires server to check mTLS client certificate
+	ClientAuth bool
 }
 
 // QuicOptions can be used to configure QUIC on the client or the server
@@ -87,6 +90,10 @@ func GetConfig(qo *QuicOptions) (*tls.Config, *quic.Config, error) {
 	}
 	if qo.IsServer {
 		tc = &tls.Config{NextProtos: qo.Alpns, Certificates: certs}
+		if qo.ClientAuth {
+			tc.ClientAuth = tls.RequireAndVerifyClientCert
+			tc.ClientCAs = certPool
+		}
 		qc = &quic.Config{KeepAlivePeriod: qo.KeepAlivePeriod}
 	}
 	qc = &quic.Config{}

@@ -5,14 +5,31 @@ import (
 	"crypto/tls"
 	"fmt"
 	"github.com/quic-go/quic-go"
+	"github.com/quic-go/quic-go/qlog"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"time"
 )
 
-func RunTestServer(
-	alpn string,
-	cert *tls.Certificate,
+func GetQuicConfigFor(cert *tls.Certificate, alpn string, logger *slog.Logger) (*tls.Config, *quic.Config) {
+	qc := quic.Config{Tracer: qlog.DefaultConnectionTracer}
+	tc := tls.Config{
+		Certificates: []tls.Certificate{*cert},
+		NextProtos:   NextProtosFor(alpn),
+		GetConfigForClient: func(info *tls.ClientHelloInfo) (*tls.Config, error) {
+			if logger != nil {
+				logger.Info("connection", "ServerName", info.ServerName, "SupportedProtos", info.SupportedProtos)
+			}
+			return nil, nil
+		},
+	}
+	return &tc, &qc
+}
+
+func RunQuicTestServer(
+	tc *tls.Config,
+	qc *quic.Config,
 	doer func(ctx context.Context, connection quic.Connection, logger *slog.Logger),
 	logger *slog.Logger,
 ) (string, context.CancelFunc, error) {
@@ -23,8 +40,8 @@ func RunTestServer(
 	)
 	go func() {
 		logger := logger
-		listener, ihost, iport, ierr := GetQuicListener(":0", cert, alpn, logger)
-		logger.Info("RunTestServer: listening", "host", ihost, "port", iport)
+		listener, ihost, iport, ierr := GetQuicListener(":0", tc, qc)
+		logger.Info("RunQuicTestServer: listening", "host", ihost, "port", iport)
 		if ierr != nil {
 			err = ierr
 			return
@@ -34,10 +51,10 @@ func RunTestServer(
 		for {
 			cnc, ierr := listener.Accept(ctx)
 			if ierr != nil {
-				logger.Error("RunTestServer: accept error", "host", host, "port", iport, "err", ierr)
+				logger.Error("RunQuicTestServer: accept error", "host", host, "port", iport, "err", ierr)
 				return
 			}
-			logger.Info("RunTestServer: accepted connection", "host", host, "port", iport, "remoteAddr", cnc.RemoteAddr().String())
+			logger.Info("RunQuicTestServer: accepted connection", "host", host, "port", iport, "remoteAddr", cnc.RemoteAddr().String())
 			if checked {
 				doer(ctx, cnc, logger)
 			} else {
@@ -49,8 +66,8 @@ func RunTestServer(
 	var lastErr error
 	for cc := 0; cc < 3 && !ready; cc++ {
 		timeout := time.Duration(10*(cc+1)) * time.Millisecond
-		tc := &tls.Config{NextProtos: NextProtosFor(alpn), InsecureSkipVerify: true}
-		ccn, ierr := NewQuicConn(fmt.Sprintf("%s:%s", "localhost", port), timeout, tc, nil)
+		ctc := &tls.Config{NextProtos: tc.NextProtos, InsecureSkipVerify: true}
+		ccn, ierr := NewQuicConn(fmt.Sprintf("%s:%s", "localhost", port), timeout, ctc, nil)
 		if ierr == nil {
 			ccn.CloseWithError(0, "")
 			ready = true
@@ -58,7 +75,7 @@ func RunTestServer(
 		lastErr = ierr
 	}
 	if !ready && err == nil {
-		err = fmt.Errorf("RunTestServer: failed to connect to %s:%s err %v", host, port, lastErr)
+		err = fmt.Errorf("RunQuicTestServer: failed to connect to %s:%s err %v", host, port, lastErr)
 	}
 	if err != nil {
 		cancel()
@@ -67,10 +84,41 @@ func RunTestServer(
 	return port, cancel, nil
 }
 
+func RunQuicTestServerFor(
+	alpn string,
+	cert *tls.Certificate,
+	doer func(ctx context.Context, connection quic.Connection, logger *slog.Logger),
+	logger *slog.Logger,
+) (string, context.CancelFunc, error) {
+	tc, qc := GetQuicConfigFor(cert, alpn, logger)
+	return RunQuicTestServer(tc, qc, doer, logger)
+}
+
 func GetLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
 }
 
 func GetLoggerFor(app string) *slog.Logger {
 	return GetLogger().With("app", app)
+}
+
+func NewTestCerts(testDir string, hosts []string) (map[string]string, error) {
+	cfs := map[string]string{
+		"cac": filepath.Join(testDir, "cacert.pem"),
+		"cak": filepath.Join(testDir, "cacert-key.pem"),
+		"svc": filepath.Join(testDir, "svcert.pem"),
+		"svk": filepath.Join(testDir, "svcert-key.pem"),
+		"clc": filepath.Join(testDir, "clcert.pem"),
+		"clk": filepath.Join(testDir, "clcert-key.pem"),
+	}
+	if err := NewCaCertFiles(cfs["cac"], cfs["cak"]); err != nil {
+		return nil, err
+	}
+	if err := NewCertFiles(hosts, cfs["cac"], cfs["cak"], cfs["svc"], cfs["svk"]); err != nil {
+		return nil, err
+	}
+	if err := NewCertFiles(nil, cfs["cac"], cfs["cak"], cfs["clc"], cfs["clk"]); err != nil {
+		return nil, err
+	}
+	return cfs, nil
 }

@@ -3,13 +3,11 @@ package netutils
 import (
 	"crypto/tls"
 	"github.com/quic-go/quic-go"
-	"github.com/quic-go/quic-go/qlog"
-	"log/slog"
 	"net"
 	"strings"
 )
 
-func GetQuicListener(addr string, cert *tls.Certificate, alpn string, logger *slog.Logger) (*quic.Listener, string, string, error) {
+func GetQuicListener(addr string, tc *tls.Config, qc *quic.Config) (*quic.Listener, string, string, error) {
 	ip, port, err := GetIPPort(addr)
 	if err != nil {
 		return nil, "", "", err
@@ -18,18 +16,7 @@ func GetQuicListener(addr string, cert *tls.Certificate, alpn string, logger *sl
 	if err != nil {
 		return nil, "", "", err
 	}
-	qc := quic.Config{Tracer: qlog.DefaultConnectionTracer}
-	tc := tls.Config{
-		Certificates: []tls.Certificate{*cert},
-		NextProtos:   NextProtosFor(alpn),
-		GetConfigForClient: func(info *tls.ClientHelloInfo) (*tls.Config, error) {
-			if logger != nil {
-				logger.Info("connection", "ServerName", info.ServerName, "SupportedProtos", info.SupportedProtos)
-			}
-			return nil, nil
-		},
-	}
-	lst, err := quic.Listen(udpConn, &tc, &qc)
+	lst, err := quic.Listen(udpConn, tc, qc)
 	if err != nil {
 		return nil, "", "", err
 	}

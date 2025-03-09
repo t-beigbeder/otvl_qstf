@@ -15,7 +15,7 @@ import (
 func TestGetQuicConnBasic(t *testing.T) {
 	cert, err := SelfSigned("localhost")
 	require.NoError(t, err)
-	port, cancel, err := RunTestServer("TestGetQuicConnBasic", cert, func(ctx context.Context, cn quic.Connection, _ *slog.Logger) {
+	port, cancel, err := RunQuicTestServerFor("TestGetQuicConnBasic", cert, func(ctx context.Context, cn quic.Connection, _ *slog.Logger) {
 		fmt.Fprintf(os.Stderr, "TestGetQuicConn: %s\n", cn.LocalAddr().String())
 	}, GetLoggerFor("server"))
 	require.NoError(t, err)
@@ -32,7 +32,7 @@ func TestGetQuicConnBasic(t *testing.T) {
 func TestGetQuicConnNoAlpn(t *testing.T) {
 	cert, err := SelfSigned("localhost")
 	require.NoError(t, err)
-	port, cancel, err := RunTestServer("", cert, func(ctx context.Context, cn quic.Connection, _ *slog.Logger) {
+	port, cancel, err := RunQuicTestServerFor("", cert, func(ctx context.Context, cn quic.Connection, _ *slog.Logger) {
 		fmt.Fprintf(os.Stderr, "TestGetQuicConn: %s\n", cn.LocalAddr().String())
 	}, GetLoggerFor("server"))
 	require.NoError(t, err)
