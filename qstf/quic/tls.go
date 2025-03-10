@@ -97,14 +97,7 @@ func GetConfig(qo *QuicOptions) (*tls.Config, *quic.Config, error) {
 		tc = &tls.Config{NextProtos: qo.Alpns, Certificates: certs, RootCAs: certPool}
 		if qo.ClientAuth {
 			tc.ClientAuth = tls.RequireAndVerifyClientCert
-			//tc.ClientAuth = tls.VerifyClientCertIfGiven
 			tc.ClientCAs = certPool
-		}
-		tc.GetConfigForClient = func(info *tls.ClientHelloInfo) (*tls.Config, error) {
-			tmp := info
-			fmt.Fprintf(os.Stderr, "GetConfigForClient %v\n", info)
-			_ = tmp
-			return nil, nil
 		}
 		tc.VerifyPeerCertificate = func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
 			fmt.Fprintf(os.Stderr, "VerifyPeerCertificate\n")

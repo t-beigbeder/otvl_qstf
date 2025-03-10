@@ -102,24 +102,29 @@ func TestGetConfigClientServerAlpn(t *testing.T) {
 		Alpns:      netutils.NextProtosFor("TestGetConfigClientServerAlpn"),
 		Tracer:     qlog.DefaultConnectionTracer,
 	})
+	require.NoError(t, err)
 	require.NotNil(t, stc)
 	require.NotNil(t, sqc)
-	var flag bool
-	port, cancel, err := netutils.RunQuicTestServer(stc, sqc, func(ctx context.Context, cn quic.Connection, _ *slog.Logger) {
-		fmt.Fprintf(os.Stderr, "TestGetConfigClientServerAlpn: %s\n", cn.LocalAddr().String())
-		flag = true
-	}, netutils.GetLoggerFor("server"))
-	require.NoError(t, err)
-	defer cancel()
-
 	ctc, cqc, err := GetConfig(&QuicOptions{
 		TlsOptions: TlsOptions{CertFile: cfs["clc"], KeyFile: cfs["clk"], CACertFile: cfs["cac"]},
 		Alpns:      netutils.NextProtosFor("TestGetConfigClientServerAlpn"),
 	})
 	require.NoError(t, err)
+	require.NotNil(t, ctc)
+	require.NotNil(t, cqc)
+	var flag bool
+
+	logger := netutils.GetLoggerFor("server")
+	port, cancel, err := netutils.RunQuicTestServerWithClient(stc, ctc, sqc, func(ctx context.Context, cn quic.Connection, _ *slog.Logger) {
+		fmt.Fprintf(os.Stderr, "TestGetConfigClientServerAlpn: %s\n", cn.LocalAddr().String())
+		flag = true
+	}, logger)
+	require.NoError(t, err)
+	defer cancel()
+
 	cnc, err := netutils.NewQuicConn("localhost:"+port, 0, ctc, cqc)
 	require.NoError(t, err)
-	time.Sleep(2 * time.Second)
+	time.Sleep(10 * time.Millisecond)
 	require.True(t, flag)
 	err = cnc.CloseWithError(0, "no issue")
 	require.NoError(t, err)

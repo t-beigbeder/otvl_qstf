@@ -27,12 +27,16 @@ func GetQuicConfigFor(cert *tls.Certificate, alpn string, logger *slog.Logger) (
 	return &tc, &qc
 }
 
-func RunQuicTestServer(
-	tc *tls.Config,
+func RunQuicTestServerWithClient(
+	stc *tls.Config,
+	ctc *tls.Config,
 	qc *quic.Config,
 	doer func(ctx context.Context, connection quic.Connection, logger *slog.Logger),
 	logger *slog.Logger,
 ) (string, context.CancelFunc, error) {
+	if ctc == nil {
+		ctc = &tls.Config{NextProtos: stc.NextProtos, InsecureSkipVerify: true}
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	var (
 		host, port string
@@ -40,7 +44,7 @@ func RunQuicTestServer(
 	)
 	go func() {
 		logger := logger
-		listener, ihost, iport, ierr := GetQuicListener(":0", tc, qc)
+		listener, ihost, iport, ierr := GetQuicListener(":0", stc, qc)
 		logger.Info("RunQuicTestServer: listening", "host", ihost, "port", iport)
 		if ierr != nil {
 			err = ierr
@@ -54,7 +58,7 @@ func RunQuicTestServer(
 				logger.Error("RunQuicTestServer: accept error", "host", host, "port", iport, "err", ierr)
 				return
 			}
-			logger.Info("RunQuicTestServer: accepted connection", "host", host, "port", iport, "remoteAddr", cnc.RemoteAddr().String())
+			logger.Info("RunQuicTestServer: accepted connection", "host", host, "port", iport, "remoteAddr", cnc.RemoteAddr().String(), "checked", checked)
 			if checked {
 				doer(ctx, cnc, logger)
 			} else {
@@ -64,9 +68,10 @@ func RunQuicTestServer(
 	}()
 	ready := err != nil
 	var lastErr error
+	time.Sleep(10 * time.Millisecond)
 	for cc := 0; cc < 3 && !ready; cc++ {
 		timeout := time.Duration(10*(cc+1)) * time.Millisecond
-		ctc := &tls.Config{NextProtos: tc.NextProtos, InsecureSkipVerify: true}
+
 		ccn, ierr := NewQuicConn(fmt.Sprintf("%s:%s", "localhost", port), timeout, ctc, nil)
 		if ierr == nil {
 			ierr2 := ccn.CloseWithError(0, "")
@@ -83,6 +88,15 @@ func RunQuicTestServer(
 		return "", nil, err
 	}
 	return port, cancel, nil
+}
+
+func RunQuicTestServer(
+	tc *tls.Config,
+	qc *quic.Config,
+	doer func(ctx context.Context, connection quic.Connection, logger *slog.Logger),
+	logger *slog.Logger,
+) (string, context.CancelFunc, error) {
+	return RunQuicTestServerWithClient(tc, nil, qc, doer, logger)
 }
 
 func RunQuicTestServerFor(

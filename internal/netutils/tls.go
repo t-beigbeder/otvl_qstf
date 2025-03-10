@@ -12,6 +12,7 @@ import (
 	"github.com/t-beigbeder/otvl_qstf/internal/common"
 	"math/big"
 	"net"
+	"strings"
 	"time"
 )
 
@@ -33,6 +34,7 @@ func SelfSigned(host string) (*tls.Certificate, error) {
 		SerialNumber: serialNumber,
 		Subject: pkix.Name{
 			Organization: []string{"otvl"},
+			CommonName:   "self-signed",
 		},
 		NotBefore: notBefore,
 		NotAfter:  notAfter,
@@ -86,6 +88,7 @@ func NewCaCert() (*x509.CertPool, *x509.Certificate, *rsa.PrivateKey, error) {
 		SerialNumber: serialNumber,
 		Subject: pkix.Name{
 			Organization: []string{"otvl"},
+			CommonName:   "CA",
 		},
 		NotBefore:             notBefore,
 		NotAfter:              notAfter,
@@ -157,10 +160,15 @@ func NewCert(hosts []string, caCert *x509.Certificate, caPrivKey *rsa.PrivateKey
 	if err != nil {
 		return nil, err
 	}
+	cn := ""
+	if hosts != nil {
+		cn = strings.Join(hosts, ",")
+	}
 	cert := &x509.Certificate{
 		SerialNumber: serialNumber,
 		Subject: pkix.Name{
 			Organization: []string{"otvl"},
+			CommonName:   cn,
 		},
 		IPAddresses: []net.IP{net.IPv4(127, 0, 0, 1), net.IPv6loopback},
 		NotBefore:   notBefore,
