@@ -175,6 +175,7 @@ func TestNewClientServerCertFiles(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := &tls.Config{
+		MinVersion:   tls.VersionTLS13,
 		Certificates: []tls.Certificate{sCert},
 		ClientCAs:    certPool,
 		ClientAuth:   tls.RequireAndVerifyClientCert,
@@ -193,6 +194,7 @@ func TestNewClientServerCertFiles(t *testing.T) {
 	hc := http.Client{
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{
+				MinVersion:   tls.VersionTLS13,
 				Certificates: []tls.Certificate{cCert},
 				RootCAs:      certPool,
 			},

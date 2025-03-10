@@ -1,11 +1,13 @@
 package quic
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
 	"fmt"
 	"github.com/quic-go/quic-go"
+	"github.com/quic-go/quic-go/logging"
 	"github.com/t-beigbeder/otvl_qstf/internal/common"
 	"github.com/t-beigbeder/otvl_qstf/internal/netutils"
 	"os"
@@ -45,6 +47,9 @@ type QuicOptions struct {
 	Alpns []string
 	// sends keep alive packets if period set, see quic.Config
 	KeepAlivePeriod time.Duration
+	// Tracer
+	Tracer func(context.Context, logging.Perspective, quic.ConnectionID) *logging.ConnectionTracer
+
 	// TLS options
 	TlsOptions
 }
@@ -88,13 +93,11 @@ func GetConfig(qo *QuicOptions) (*tls.Config, *quic.Config, error) {
 		} else {
 			tc = &tls.Config{NextProtos: qo.Alpns, Certificates: certs, RootCAs: certPool}
 		}
-		qc = &quic.Config{KeepAlivePeriod: qo.KeepAlivePeriod}
-	}
-	if qo.IsServer {
-		tc = &tls.Config{NextProtos: qo.Alpns, Certificates: certs}
+	} else {
+		tc = &tls.Config{NextProtos: qo.Alpns, Certificates: certs, RootCAs: certPool}
 		if qo.ClientAuth {
 			tc.ClientAuth = tls.RequireAndVerifyClientCert
-			tc.ClientAuth = tls.VerifyClientCertIfGiven
+			//tc.ClientAuth = tls.VerifyClientCertIfGiven
 			tc.ClientCAs = certPool
 		}
 		tc.GetConfigForClient = func(info *tls.ClientHelloInfo) (*tls.Config, error) {
@@ -107,11 +110,7 @@ func GetConfig(qo *QuicOptions) (*tls.Config, *quic.Config, error) {
 			fmt.Fprintf(os.Stderr, "VerifyPeerCertificate\n")
 			return nil
 		}
-		qc = &quic.Config{KeepAlivePeriod: qo.KeepAlivePeriod}
 	}
-	qc = &quic.Config{}
-	if qo.KeepAlivePeriod != 0 {
-		qc.KeepAlivePeriod = qo.KeepAlivePeriod
-	}
+	qc = &quic.Config{KeepAlivePeriod: qo.KeepAlivePeriod, Tracer: qo.Tracer}
 	return tc, qc, nil
 }

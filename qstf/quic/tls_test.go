@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/quic-go/quic-go"
+	"github.com/quic-go/quic-go/qlog"
 	"github.com/stretchr/testify/require"
 	"github.com/t-beigbeder/otvl_qstf/internal/netutils"
 	"log/slog"
@@ -94,10 +95,12 @@ func TestGetConfigClientServerAlpn(t *testing.T) {
 	td := t.TempDir()
 	cfs, err := netutils.NewTestCerts(td, []string{"localhost"})
 	require.NoError(t, err)
+	os.Setenv("QLOGDIR", td)
 	stc, sqc, err := GetConfig(&QuicOptions{
 		IsServer:   true,
 		TlsOptions: TlsOptions{CertFile: cfs["svc"], KeyFile: cfs["svk"], CACertFile: cfs["cac"], ClientAuth: true},
 		Alpns:      netutils.NextProtosFor("TestGetConfigClientServerAlpn"),
+		Tracer:     qlog.DefaultConnectionTracer,
 	})
 	require.NotNil(t, stc)
 	require.NotNil(t, sqc)
