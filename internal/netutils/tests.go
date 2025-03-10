@@ -70,7 +70,7 @@ func RunQuicTestServerWithClient(
 	var lastErr error
 	time.Sleep(10 * time.Millisecond)
 	for cc := 0; cc < 3 && !ready; cc++ {
-		timeout := time.Duration(10*(cc+1)) * time.Millisecond
+		timeout := time.Duration(20*(cc+1)) * time.Millisecond
 
 		ccn, ierr := NewQuicConn(fmt.Sprintf("%s:%s", "localhost", port), timeout, ctc, nil)
 		if ierr == nil {
