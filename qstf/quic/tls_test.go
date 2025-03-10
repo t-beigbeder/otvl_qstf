@@ -2,6 +2,7 @@ package quic
 
 import (
 	"context"
+	"crypto/x509"
 	"fmt"
 	"github.com/quic-go/quic-go"
 	"github.com/quic-go/quic-go/qlog"
@@ -96,11 +97,19 @@ func TestGetConfigClientServerAlpn(t *testing.T) {
 	cfs, err := netutils.NewTestCerts(td, []string{"localhost"})
 	require.NoError(t, err)
 	os.Setenv("QLOGDIR", td)
+	logger := netutils.GetLoggerFor("server")
 	stc, sqc, err := GetConfig(&QuicOptions{
-		IsServer:   true,
-		TlsOptions: TlsOptions{CertFile: cfs["svc"], KeyFile: cfs["svk"], CACertFile: cfs["cac"], ClientAuth: true},
-		Alpns:      netutils.NextProtosFor("TestGetConfigClientServerAlpn"),
-		Tracer:     qlog.DefaultConnectionTracer,
+		IsServer: true,
+		TlsOptions: TlsOptions{
+			CertFile: cfs["svc"], KeyFile: cfs["svk"], CACertFile: cfs["cac"],
+			ClientAuth: true,
+			VerifyPeerCertificate: func(cc [][]*x509.Certificate) error {
+				logger.Debug("VerifyPeerCertificate", "SerialNumber", cc[0][0].SerialNumber)
+				return nil
+			},
+		},
+		Alpns:  netutils.NextProtosFor("TestGetConfigClientServerAlpn"),
+		Tracer: qlog.DefaultConnectionTracer,
 	})
 	require.NoError(t, err)
 	require.NotNil(t, stc)
@@ -114,9 +123,8 @@ func TestGetConfigClientServerAlpn(t *testing.T) {
 	require.NotNil(t, cqc)
 	var flag bool
 
-	logger := netutils.GetLoggerFor("server")
-	port, cancel, err := netutils.RunQuicTestServerWithClient(stc, ctc, sqc, func(ctx context.Context, cn quic.Connection, _ *slog.Logger) {
-		fmt.Fprintf(os.Stderr, "TestGetConfigClientServerAlpn: %s\n", cn.LocalAddr().String())
+	port, cancel, err := netutils.RunQuicTestServerWithClient(stc, ctc, sqc, func(ctx context.Context, cn quic.Connection, logger *slog.Logger) {
+		logger.Debug("GetConfigClientServerAlpn: doer", "RemoteAddr", cn.RemoteAddr().String())
 		flag = true
 	}, logger)
 	require.NoError(t, err)

@@ -5,12 +5,10 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
-	"fmt"
 	"github.com/quic-go/quic-go"
 	"github.com/quic-go/quic-go/logging"
 	"github.com/t-beigbeder/otvl_qstf/internal/common"
 	"github.com/t-beigbeder/otvl_qstf/internal/netutils"
-	"os"
 	"path/filepath"
 	"time"
 )
@@ -37,6 +35,9 @@ type TlsOptions struct {
 
 	// ClientAuth requires server to check mTLS client certificate
 	ClientAuth bool
+
+	// VerifyPeerCertificate configures the server for checking client certificates
+	VerifyPeerCertificate func([][]*x509.Certificate) error
 }
 
 // QuicOptions can be used to configure QUIC on the client or the server
@@ -99,9 +100,10 @@ func GetConfig(qo *QuicOptions) (*tls.Config, *quic.Config, error) {
 			tc.ClientAuth = tls.RequireAndVerifyClientCert
 			tc.ClientCAs = certPool
 		}
-		tc.VerifyPeerCertificate = func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
-			fmt.Fprintf(os.Stderr, "VerifyPeerCertificate\n")
-			return nil
+		if qo.VerifyPeerCertificate != nil {
+			tc.VerifyPeerCertificate = func(_ [][]byte, verifiedChains [][]*x509.Certificate) error {
+				return qo.VerifyPeerCertificate(verifiedChains)
+			}
 		}
 	}
 	qc = &quic.Config{KeepAlivePeriod: qo.KeepAlivePeriod, Tracer: qo.Tracer}
