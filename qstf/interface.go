@@ -2,7 +2,7 @@ package qstf
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"github.com/quic-go/quic-go"
 	"log/slog"
 	"sync"
@@ -35,15 +35,24 @@ func NewHost(ctx context.Context, logger *slog.Logger, lst *quic.Listener, hostI
 		},
 		HostId: hostId,
 	}
+	go h.accept()
 	return h
 }
 
 func (h *Host) RegisterFunction(funcName string, f func(any) any) error {
-	return errors.New("not implemented")
+	h.bh.mx.Lock()
+	defer h.bh.mx.Unlock()
+	_, ok := h.bh.funcRegistry[funcName]
+	if ok {
+		return fmt.Errorf("Function %s already exists", funcName)
+	}
+	h.bh.funcRegistry[funcName] = f
+	return nil
 }
 
 func (h *Host) accept() {
 	for {
 		cnc, err := h.bh.lst.Accept(h.bh.ctx)
+		_, _ = cnc, err
 	}
 }
