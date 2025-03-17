@@ -12,15 +12,15 @@ and on [quic-go](https://quic-go.net/docs/) for the implementation of the protoc
 
 On a QUIC connection, open a standard stream and provide (streamId, hostId, funcName):
 
-- using direct connection, after peer host accepts stream opening, starts monitoring streamUuid
+- using direct connection, after peer host accepts stream opening, peer starts monitoring streamUuid
 and optionally executes a function registered by its name,
 function is implicitly reading the stream (as a flow.Map connected to it)
 - using application proxy, enables to ask the AP to request the same on an actual target host
+- local use of opened streams except when initializing is standard
+- peer's accepted streams are not handled directly as quic.xxxStream by the application
+but as qstf.Stream that are unregistered properly on EOF
 
-Thus accepted streams are not handled directly as quic.xxxStreams by the application
-but as qstf.xxxStreams that are unregistered properly on close.
-
-Functions are not monitored, it is their implementation's responsibility to free allocated resources
+Functions are not monitored, it is their implementation's responsibility to release resources
 on stream close. They are executed with a dedicated child context of the connection's one.
 
 A client can request a peer to open back a stream by executing a remote function that does the same.

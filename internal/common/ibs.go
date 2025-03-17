@@ -3,6 +3,7 @@ package common
 import (
 	"encoding/binary"
 	"fmt"
+	"io"
 	"math"
 )
 
@@ -37,6 +38,28 @@ func Bs2LBs(ebs []byte) []byte {
 	return bs
 }
 
+func LBsReader(rr io.Reader) ([]byte, error) {
+	lbs := I16Bs{}
+	_, err := io.ReadFull(rr, lbs[:])
+	if err != nil {
+		return nil, err
+	}
+	ebs := make([]byte, lbs.Get())
+	_, err = io.ReadFull(rr, ebs)
+	if err != nil {
+		return nil, err
+	}
+	return ebs, nil
+}
+
+func LStReader(rr io.Reader) (string, error) {
+	ebs, err := LBsReader(rr)
+	if err != nil {
+		return "", err
+	}
+	return string(ebs), nil
+}
+
 type I32Bs [4]byte
 
 func NewI32Bs(ln uint32) I32Bs {
@@ -54,5 +77,25 @@ func (lbs I32Bs) Get() uint32 {
 }
 
 func (lbs I32Bs) String() string {
+	return fmt.Sprintf("%d", lbs.Get())
+}
+
+type I64Bs [8]byte
+
+func NewI64Bs(ln uint64) I64Bs {
+	lbs := I64Bs{}
+	binary.BigEndian.PutUint64(lbs[:], ln)
+	return lbs
+}
+
+func SetI64Bs(ln uint64, bs []byte) {
+	binary.BigEndian.PutUint64(bs, ln)
+}
+
+func (lbs I64Bs) Get() uint64 {
+	return binary.BigEndian.Uint64(lbs[:])
+}
+
+func (lbs I64Bs) String() string {
 	return fmt.Sprintf("%d", lbs.Get())
 }
