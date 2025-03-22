@@ -79,8 +79,16 @@ func (h *Host) accept() {
 			h.bh.logger.Error("accept error", "err", err)
 			return
 		}
-		go h.initStream(cnc.AcceptStream(h.bh.ctx))
-		go h.initStream(cnc.AcceptUniStream(h.bh.ctx))
+		go func() {
+			for {
+				h.initStream(cnc.AcceptStream(h.bh.ctx))
+			}
+		}()
+		go func() {
+			for {
+				h.initStream(cnc.AcceptUniStream(h.bh.ctx))
+			}
+		}()
 	}
 }
 

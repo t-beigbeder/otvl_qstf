@@ -123,7 +123,7 @@ func TestGetConfigClientServerAlpn(t *testing.T) {
 	require.NotNil(t, cqc)
 	var flag bool
 
-	port, cancel, err := netutils.RunQuicTestServerWithClient(stc, ctc, sqc, func(ctx context.Context, cn quic.Connection, logger *slog.Logger) {
+	port, cancel, err := netutils.RunQuicTestServerWithCtc(stc, ctc, sqc, func(ctx context.Context, cn quic.Connection, logger *slog.Logger) {
 		logger.Debug("GetConfigClientServerAlpn: doer", "RemoteAddr", cn.RemoteAddr().String())
 		flag = true
 	}, logger)

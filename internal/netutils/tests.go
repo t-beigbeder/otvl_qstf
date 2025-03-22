@@ -27,7 +27,7 @@ func GetQuicConfigFor(cert *tls.Certificate, alpn string, logger *slog.Logger) (
 	return &tc, &qc
 }
 
-func RunQuicTestServerWithClient(
+func RunQuicTestServerWithCtc(
 	stc *tls.Config,
 	ctc *tls.Config,
 	qc *quic.Config,
@@ -96,7 +96,7 @@ func RunQuicTestServer(
 	doer func(ctx context.Context, connection quic.Connection, logger *slog.Logger),
 	logger *slog.Logger,
 ) (string, context.CancelFunc, error) {
-	return RunQuicTestServerWithClient(tc, nil, qc, doer, logger)
+	return RunQuicTestServerWithCtc(tc, nil, qc, doer, logger)
 }
 
 func RunQuicTestServerFor(

@@ -1,0 +1,5 @@
+package qstf
+
+func RunQstfTestServerWithCtc() {
+
+}
