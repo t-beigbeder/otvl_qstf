@@ -12,6 +12,10 @@ import (
 	"time"
 )
 
+const (
+	QstfAlpn = "x-otvl-qstf-v0.1"
+)
+
 type baseHost struct {
 	ctx            context.Context
 	logger         *slog.Logger

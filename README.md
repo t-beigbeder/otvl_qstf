@@ -6,7 +6,7 @@ and interconnect them through an Application Proxy.
 ## Foundation
 
 Based on [go-streams](https://github.com/reugn/go-streams) for the pipelines
-and on [quic-go](https://quic-go.net/docs/) for the implementation of the protocol.
+and on [quic-go](https://quic-go.net/docs/) for the network transport.
 
 ## Connection/Stream
 
