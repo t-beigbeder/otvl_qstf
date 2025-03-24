@@ -3,12 +3,23 @@
 Golang module to develop streaming functions leveraging the QUIC Transport protocol
 and interconnect them through an Application Proxy.
 
-## Foundation
+## Host/Connection/Stream
 
-Based on [go-streams](https://github.com/reugn/go-streams) for the pipelines
-and on [quic-go](https://quic-go.net/docs/) for the network transport.
+The Application Proxy (AP) is a QUIC server that is able to interconnect QUIC clients:
+a QUIC client can connect to the AP and ask it to open a stream with another QUIC client,
+two streams will in effect be created, one between each of the peers and the AP,
+leaving to the AP the responsibility to relay read data chunks from one to the other.
 
-## Connection/Stream
+QUIC connections are managed by the library.
+The applications only deal with hosts, streams and functions.
+
+While a QUIC client can connect explicitly to an Application Proxy (AP),
+direct connections to a QUIC server will actually enable corresponding clients
+to leverage it as an AP too,
+enabling simple scenarios such as direct callback from the server to the client,
+but more complex collaborations as well.
+
+[...] 
 
 On a QUIC connection, open a standard stream and provide (streamId, hostId, funcName):
 
