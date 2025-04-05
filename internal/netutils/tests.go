@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"github.com/quic-go/quic-go"
 	"github.com/quic-go/quic-go/qlog"
+	"github.com/t-beigbeder/otvl_qstf/internal/common"
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -117,14 +119,28 @@ func GetLoggerFor(app string) *slog.Logger {
 	return GetLogger().With("app", app)
 }
 
+func getCertDirs(testDir string, hosts []string) (string, string, string) {
+	tcd := os.Getenv("QSTF_TEST_CERTS_DIR")
+	if os.Getenv("QSTF_TEST_CACHE") == "" {
+		return testDir, testDir, testDir
+	}
+	if tcd == "" {
+		tcd = filepath.Join(os.TempDir(), "qstf_test_certs")
+	}
+	return filepath.Join(tcd, "ca"),
+		filepath.Join(tcd, common.Hash(strings.Join(hosts, ","))),
+		filepath.Join(tcd, "cl")
+}
+
 func NewTestCerts(testDir string, hosts []string) (map[string]string, error) {
+	caDir, svDir, clDir := getCertDirs(testDir, hosts)
 	cfs := map[string]string{
-		"cac": filepath.Join(testDir, "cacert.pem"),
-		"cak": filepath.Join(testDir, "cacert-key.pem"),
-		"svc": filepath.Join(testDir, "svcert.pem"),
-		"svk": filepath.Join(testDir, "svcert-key.pem"),
-		"clc": filepath.Join(testDir, "clcert.pem"),
-		"clk": filepath.Join(testDir, "clcert-key.pem"),
+		"cac": filepath.Join(caDir, "cacert.pem"),
+		"cak": filepath.Join(caDir, "cacert-key.pem"),
+		"svc": filepath.Join(svDir, "svcert.pem"),
+		"svk": filepath.Join(svDir, "svcert-key.pem"),
+		"clc": filepath.Join(clDir, "clcert.pem"),
+		"clk": filepath.Join(clDir, "clcert-key.pem"),
 	}
 	if err := NewCaCertFiles(cfs["cac"], cfs["cak"]); err != nil {
 		return nil, err
