@@ -163,32 +163,43 @@ func TestNewCertFiles(t *testing.T) {
 }
 
 func TestNewTestCerts(t *testing.T) {
+	if os.Getenv("QSTF_TEST_FULL") == "" {
+		t.Skip("QSTF_TEST_FULL not set")
+	}
 	logger := GetLoggerFor("TestNewTestCerts")
 	os.Setenv("QSTF_TEST_CACHE", "")
 	td := t.TempDir()
 	logger.Info("TestNewTestCerts", "msg", "first no cache")
-	cfs, err := NewTestCerts(td, []string{"0.0.0.0", "localhost"})
+	cfs, err := NewTestCerts(td, []string{"0.0.0.0", "localhost"}, false)
+	require.NoError(t, err)
+	td = t.TempDir()
+	logger.Info("TestNewTestCerts", "msg", "second no cache, second client")
+	cfs, err = NewTestCerts(td, []string{"0.0.0.0", "localhost"}, true)
 	require.NoError(t, err)
 	os.Setenv("QSTF_TEST_CACHE", "1")
 	td = t.TempDir()
 	logger.Info("TestNewTestCerts", "msg", "first in cache")
-	cfs, err = NewTestCerts(td, []string{"0.0.0.0", "localhost"})
+	cfs, err = NewTestCerts(td, []string{"0.0.0.0", "localhost"}, false)
 	require.NoError(t, err)
 	td = t.TempDir()
 	logger.Info("TestNewTestCerts", "msg", "second in cache")
-	cfs, err = NewTestCerts(td, []string{"0.0.0.0", "localhost"})
+	cfs, err = NewTestCerts(td, []string{"0.0.0.0", "localhost"}, false)
 	require.NoError(t, err)
 	td = t.TempDir()
-	logger.Info("TestNewTestCerts", "msg", "third in cache, new server")
-	cfs, err = NewTestCerts(td, []string{"localhost"})
+	logger.Info("TestNewTestCerts", "msg", "third in cache, second client")
+	cfs, err = NewTestCerts(td, []string{"0.0.0.0", "localhost"}, true)
 	require.NoError(t, err)
-	logger.Info("TestNewTestCerts", "msg", "third in cache, new server done")
+	td = t.TempDir()
+	logger.Info("TestNewTestCerts", "msg", "fourth in cache, new server and second client")
+	cfs, err = NewTestCerts(td, []string{"localhost"}, true)
+	require.NoError(t, err)
+	logger.Info("TestNewTestCerts", "msg", "fourth in cache, new server done")
 	_ = cfs
 }
 
 func TestNewClientServerCertFiles(t *testing.T) {
 	td := t.TempDir()
-	cfs, err := NewTestCerts(td, []string{"0.0.0.0", "localhost"})
+	cfs, err := NewTestCerts(td, []string{"0.0.0.0", "localhost"}, false)
 	require.NoError(t, err)
 	caPEM, err := common.LoadFile(cfs["cac"])
 	require.NoError(t, err)
@@ -196,7 +207,7 @@ func TestNewClientServerCertFiles(t *testing.T) {
 	certPool.AppendCertsFromPEM(caPEM)
 	sCert, err := tls.LoadX509KeyPair(cfs["svc"], cfs["svk"])
 	require.NoError(t, err)
-	cCert, err := tls.LoadX509KeyPair(cfs["clc"], cfs["clk"])
+	cCert, err := tls.LoadX509KeyPair(cfs["c1c"], cfs["c1k"])
 	require.NoError(t, err)
 
 	cfg := &tls.Config{

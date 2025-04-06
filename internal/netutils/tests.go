@@ -129,9 +129,9 @@ func GetLoggerFor(app string) *slog.Logger {
 	return GetLogger().With("app", app)
 }
 
-func getCertDirs(testDir string, hosts []string) (string, string, string) {
+func getCertDirs(testDir string, hosts []string) (string, string, string, string) {
 	if os.Getenv("QSTF_TEST_CACHE") == "" {
-		return testDir, testDir, testDir
+		return testDir, testDir, testDir, testDir
 	}
 	tcd := os.Getenv("QSTF_TEST_CERTS_DIR")
 	if tcd == "" {
@@ -139,7 +139,8 @@ func getCertDirs(testDir string, hosts []string) (string, string, string) {
 	}
 	return filepath.Join(tcd, "ca"),
 		filepath.Join(tcd, common.Hash(strings.Join(hosts, ","))),
-		filepath.Join(tcd, "cl")
+		filepath.Join(tcd, "c1"),
+		filepath.Join(tcd, "c2")
 }
 
 func makeCertIf(certDir string, maker func() error) error {
@@ -164,15 +165,15 @@ func makeCertIf(certDir string, maker func() error) error {
 	return nil
 }
 
-func NewTestCerts(testDir string, hosts []string) (map[string]string, error) {
-	caDir, svDir, clDir := getCertDirs(testDir, hosts)
+func NewTestCerts(testDir string, hosts []string, hasSecClient bool) (map[string]string, error) {
+	caDir, svDir, c1Dir, c2Dir := getCertDirs(testDir, hosts)
 	cfs := map[string]string{
 		"cac": filepath.Join(caDir, "cacert.pem"),
 		"cak": filepath.Join(caDir, "cacert-key.pem"),
 		"svc": filepath.Join(svDir, "svcert.pem"),
 		"svk": filepath.Join(svDir, "svcert-key.pem"),
-		"clc": filepath.Join(clDir, "clcert.pem"),
-		"clk": filepath.Join(clDir, "clcert-key.pem"),
+		"c1c": filepath.Join(c1Dir, "c1cert.pem"),
+		"c1k": filepath.Join(c1Dir, "c1cert-key.pem"),
 	}
 	if err := makeCertIf(caDir, func() error {
 		return NewCaCertFiles(cfs["cac"], cfs["cak"])
@@ -184,8 +185,18 @@ func NewTestCerts(testDir string, hosts []string) (map[string]string, error) {
 	}); err != nil {
 		return nil, err
 	}
-	if err := makeCertIf(clDir, func() error {
-		return NewCertFiles(nil, cfs["cac"], cfs["cak"], cfs["clc"], cfs["clk"])
+	if err := makeCertIf(c1Dir, func() error {
+		return NewCertFiles(nil, cfs["cac"], cfs["cak"], cfs["c1c"], cfs["c1k"])
+	}); err != nil {
+		return nil, err
+	}
+	if !hasSecClient {
+		return cfs, nil
+	}
+	cfs["c2c"] = filepath.Join(c2Dir, "c2cert.pem")
+	cfs["c2k"] = filepath.Join(c2Dir, "c2cert-key.pem")
+	if err := makeCertIf(c2Dir, func() error {
+		return NewCertFiles(nil, cfs["cac"], cfs["cak"], cfs["c2c"], cfs["c2k"])
 	}); err != nil {
 		return nil, err
 	}

@@ -62,7 +62,7 @@ func TestGetConfigInsecureAlpn(t *testing.T) {
 
 func TestGetConfigSecureAlpn(t *testing.T) {
 	td := t.TempDir()
-	cfs, err := netutils.NewTestCerts(td, []string{"localhost"})
+	cfs, err := netutils.NewTestCerts(td, []string{"localhost"}, false)
 	require.NoError(t, err)
 	stc, sqc, err := GetConfig(&QuicOptions{
 		IsServer:   true,
@@ -94,7 +94,7 @@ func TestGetConfigSecureAlpn(t *testing.T) {
 
 func TestGetConfigClientServerAlpn(t *testing.T) {
 	td := t.TempDir()
-	cfs, err := netutils.NewTestCerts(td, []string{"localhost"})
+	cfs, err := netutils.NewTestCerts(td, []string{"localhost"}, false)
 	require.NoError(t, err)
 	os.Setenv("QLOGDIR", td)
 	logger := netutils.GetLoggerFor("server")
@@ -115,7 +115,7 @@ func TestGetConfigClientServerAlpn(t *testing.T) {
 	require.NotNil(t, stc)
 	require.NotNil(t, sqc)
 	ctc, cqc, err := GetConfig(&QuicOptions{
-		TlsOptions: TlsOptions{CertFile: cfs["clc"], KeyFile: cfs["clk"], CACertFile: cfs["cac"]},
+		TlsOptions: TlsOptions{CertFile: cfs["c1c"], KeyFile: cfs["c1k"], CACertFile: cfs["cac"]},
 		Alpns:      netutils.NextProtosFor("TestGetConfigClientServerAlpn"),
 	})
 	require.NoError(t, err)
