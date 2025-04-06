@@ -120,16 +120,38 @@ func GetLoggerFor(app string) *slog.Logger {
 }
 
 func getCertDirs(testDir string, hosts []string) (string, string, string) {
-	tcd := os.Getenv("QSTF_TEST_CERTS_DIR")
 	if os.Getenv("QSTF_TEST_CACHE") == "" {
 		return testDir, testDir, testDir
 	}
+	tcd := os.Getenv("QSTF_TEST_CERTS_DIR")
 	if tcd == "" {
 		tcd = filepath.Join(os.TempDir(), "qstf_test_certs")
 	}
 	return filepath.Join(tcd, "ca"),
 		filepath.Join(tcd, common.Hash(strings.Join(hosts, ","))),
 		filepath.Join(tcd, "cl")
+}
+
+func makeCertIf(certDir string, maker func() error) error {
+	if os.Getenv("QSTF_TEST_CACHE") == "" {
+		return maker()
+	}
+	ffn := filepath.Join(certDir, "done.flag")
+	if common.FileExists(ffn) {
+		return nil
+	}
+	if !common.FileExists(certDir) {
+		if err := os.MkdirAll(certDir, 0700); err != nil {
+			return err
+		}
+	}
+	if err := maker(); err != nil {
+		return err
+	}
+	if err := common.WriteFile(ffn, nil); err != nil {
+		return err
+	}
+	return nil
 }
 
 func NewTestCerts(testDir string, hosts []string) (map[string]string, error) {
@@ -142,13 +164,19 @@ func NewTestCerts(testDir string, hosts []string) (map[string]string, error) {
 		"clc": filepath.Join(clDir, "clcert.pem"),
 		"clk": filepath.Join(clDir, "clcert-key.pem"),
 	}
-	if err := NewCaCertFiles(cfs["cac"], cfs["cak"]); err != nil {
+	if err := makeCertIf(caDir, func() error {
+		return NewCaCertFiles(cfs["cac"], cfs["cak"])
+	}); err != nil {
 		return nil, err
 	}
-	if err := NewCertFiles(hosts, cfs["cac"], cfs["cak"], cfs["svc"], cfs["svk"]); err != nil {
+	if err := makeCertIf(svDir, func() error {
+		return NewCertFiles(hosts, cfs["cac"], cfs["cak"], cfs["svc"], cfs["svk"])
+	}); err != nil {
 		return nil, err
 	}
-	if err := NewCertFiles(nil, cfs["cac"], cfs["cak"], cfs["clc"], cfs["clk"]); err != nil {
+	if err := makeCertIf(clDir, func() error {
+		return NewCertFiles(nil, cfs["cac"], cfs["cak"], cfs["clc"], cfs["clk"])
+	}); err != nil {
 		return nil, err
 	}
 	return cfs, nil

@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/t-beigbeder/otvl_qstf/internal/common"
 	"net/http"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -159,6 +160,30 @@ func TestNewCertFiles(t *testing.T) {
 	)
 	require.NoError(t, err)
 	_ = pair
+}
+
+func TestNewTestCerts(t *testing.T) {
+	logger := GetLoggerFor("TestNewTestCerts")
+	os.Setenv("QSTF_TEST_CACHE", "")
+	td := t.TempDir()
+	logger.Info("TestNewTestCerts", "msg", "first no cache")
+	cfs, err := NewTestCerts(td, []string{"0.0.0.0", "localhost"})
+	require.NoError(t, err)
+	os.Setenv("QSTF_TEST_CACHE", "1")
+	td = t.TempDir()
+	logger.Info("TestNewTestCerts", "msg", "first in cache")
+	cfs, err = NewTestCerts(td, []string{"0.0.0.0", "localhost"})
+	require.NoError(t, err)
+	td = t.TempDir()
+	logger.Info("TestNewTestCerts", "msg", "second in cache")
+	cfs, err = NewTestCerts(td, []string{"0.0.0.0", "localhost"})
+	require.NoError(t, err)
+	td = t.TempDir()
+	logger.Info("TestNewTestCerts", "msg", "third in cache, new server")
+	cfs, err = NewTestCerts(td, []string{"localhost"})
+	require.NoError(t, err)
+	logger.Info("TestNewTestCerts", "msg", "third in cache, new server done")
+	_ = cfs
 }
 
 func TestNewClientServerCertFiles(t *testing.T) {

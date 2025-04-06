@@ -3,6 +3,7 @@ all:
 help:	## show this help
 	@fgrep -h "##" $(MAKEFILE_LIST) | fgrep -v fgrep | sed -e 's/\\$$//' | sed -e 's/##//'
 .PHONY: test
+test:	export QSTF_TEST_CACHE = 1
 test:	## go test the application
 	go test ./...
 .PHONY: build
