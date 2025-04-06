@@ -3,8 +3,6 @@ package netutils
 import (
 	"context"
 	"crypto/tls"
-	"crypto/x509"
-	"encoding/hex"
 	"fmt"
 	"github.com/quic-go/quic-go"
 	"github.com/quic-go/quic-go/qlog"
@@ -48,14 +46,6 @@ func RunQuicTestServerWithCtc(
 	)
 	go func() {
 		logger := logger
-		stc.VerifyPeerCertificate = func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
-			if len(verifiedChains) == 0 || len(verifiedChains[0]) == 0 {
-				return fmt.Errorf("no verified chains found")
-			}
-			clct := verifiedChains[0][0]
-			logger.Debug("VerifyPeerCertificate", "cert", hex.EncodeToString(clct.SerialNumber.Bytes()))
-			return nil
-		}
 		listener, ihost, iport, ierr := GetQuicListener(":0", stc, qc)
 		logger.Info("RunQuicTestServer: listening", "host", ihost, "port", iport)
 		if ierr != nil {

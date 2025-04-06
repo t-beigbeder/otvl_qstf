@@ -3,6 +3,7 @@ package quic
 import (
 	"context"
 	"crypto/x509"
+	"encoding/hex"
 	"fmt"
 	"github.com/quic-go/quic-go"
 	"github.com/quic-go/quic-go/qlog"
@@ -104,7 +105,10 @@ func TestGetConfigClientServerAlpn(t *testing.T) {
 			CertFile: cfs["svc"], KeyFile: cfs["svk"], CACertFile: cfs["cac"],
 			ClientAuth: true,
 			VerifyPeerCertificate: func(cc [][]*x509.Certificate) error {
-				logger.Debug("VerifyPeerCertificate", "SerialNumber", cc[0][0].SerialNumber)
+				if len(cc) == 0 || len(cc[0]) == 0 {
+					return fmt.Errorf("no verified chains found")
+				}
+				logger.Debug("VerifyPeerCertificate", "SerialNumber", hex.EncodeToString(cc[0][0].SerialNumber.Bytes()))
 				return nil
 			},
 		},
