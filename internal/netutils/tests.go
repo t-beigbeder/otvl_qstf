@@ -60,10 +60,11 @@ func RunQuicTestServerWithCtc(
 				logger.Error("RunQuicTestServerWithCtc: accept error", "host", host, "port", iport, "err", ierr)
 				return
 			}
-			logger.Info("RunQuicTestServerWithCtc: accepted connection", "host", host, "port", iport, "remoteAddr", cnc.RemoteAddr().String(), "checked", checked)
 			if checked {
+				logger.Info("RunQuicTestServerWithCtc: accepted connection", "host", host, "port", iport, "remoteAddr", cnc.RemoteAddr().String(), "checked", checked)
 				doer(ctx, cnc, logger)
 			} else {
+				logger.Info("RunQuicTestServerWithCtc: accepted test check connection", "host", host, "port", iport, "remoteAddr", cnc.RemoteAddr().String(), "checked", checked)
 				checked = true
 			}
 		}

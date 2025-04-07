@@ -24,6 +24,7 @@ func RunQstfTestServerWithCtc(
 		cfs        map[string]string
 		stc        *tls.Config
 		sqc        *quic.Config
+		listener   *quic.Listener
 		host, port string
 	)
 	defer func() {
@@ -43,34 +44,16 @@ func RunQstfTestServerWithCtc(
 	if err != nil {
 		return "", nil, err
 	}
-	go func() {
-		logger := logger
-		if logger == nil {
-			logger = common.GetLoggerFor("test-server")
-		}
-		listener, ihost, iport, ierr := netutils.GetQuicListener(":0", stc, sqc)
-		logger.Info("RunQstfTestServerWithCtc: listening", "host", ihost, "port", iport)
-		if ierr != nil {
-			err = ierr
-			return
-		}
-		host, port = ihost, iport
-		var checked bool
-		for {
-			cnc, ierr := listener.Accept(ctx)
-			if ierr != nil {
-				logger.Error("RunQstfTestServerWithCtc: accept error", "host", host, "port", iport, "err", ierr)
-				return
-			}
-			if checked {
-				logger.Info("RunQstfTestServerWithCtc: accepted connection", "host", host, "port", iport, "remoteAddr", cnc.RemoteAddr().String(), "checked", checked)
-				doer(ctx, cnc, logger)
-			} else {
-				logger.Info("RunQstfTestServerWithCtc: accepted check test connection", "host", host, "port", iport, "remoteAddr", cnc.RemoteAddr().String(), "checked", checked)
-				checked = true
-			}
-		}
-	}()
+	listener, host, port, err = netutils.GetQuicListener(":0", stc, sqc)
+	if err != nil {
+		return "", nil, err
+	}
+	if logger == nil {
+		logger = common.GetLoggerFor("test-server")
+	}
+	logger.Info("RunQstfTestServerWithCtc: listening", "host", host, "port", port)
+	sh := NewServerHost(ctx, logger, listener, "test-server-id")
+	_ = sh
 	ready := err != nil
 	var lastErr error
 	time.Sleep(10 * time.Millisecond)

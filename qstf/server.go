@@ -23,7 +23,7 @@ type ServerHost struct {
 	lst            *quic.Listener
 	mx             sync.Mutex
 	funcRegistry   map[string]func(any) any
-	streamRegistry map[uuid.UUID]Stream
+	streamRegistry map[uuid.UUID]*Stream
 	HostId         string
 }
 
@@ -34,7 +34,7 @@ func NewServerHost(ctx context.Context, logger *slog.Logger, lst *quic.Listener,
 		logger:         logger.With("hostId", hostId),
 		lst:            lst,
 		funcRegistry:   make(map[string]func(any) any),
-		streamRegistry: make(map[uuid.UUID]Stream),
+		streamRegistry: make(map[uuid.UUID]*Stream),
 		HostId:         hostId,
 	}
 	go sh.accept()
@@ -79,12 +79,22 @@ func (sh *ServerHost) accept() {
 		}
 		go func() {
 			for {
-				sh.initStream(cnc.AcceptStream(sh.ctx))
+				st, err := cnc.AcceptStream(sh.ctx)
+				if err != nil {
+					sh.logger.Error("accept stream error", "err", err)
+					return
+				}
+				sh.initStream(st)
 			}
 		}()
 		go func() {
 			for {
-				sh.initStream(cnc.AcceptUniStream(sh.ctx))
+				st, err := cnc.AcceptUniStream(sh.ctx)
+				if err != nil {
+					sh.logger.Error("accept unistream error", "err", err)
+					return
+				}
+				sh.initStream(st)
 			}
 		}()
 	}
@@ -125,11 +135,13 @@ func (mst *Stream) SetReadDeadline(t time.Time) error {
 	return mst.rs.SetReadDeadline(t)
 }
 
-func (sh *ServerHost) initStream(st quic.ReceiveStream, err error) {
+func (sh *ServerHost) initStream(st quic.ReceiveStream) {
+	hid, err := common.LStReader(st)
 	if err != nil {
-		sh.logger.Error("accept Stream error", "err", err)
+		sh.logger.Error("read hostId error", "err", err)
 		return
 	}
+	_ = hid // FIXME: register peer host
 	var stId uuid.UUID
 	_, err = io.ReadFull(st, stId[:])
 	if err != nil {
@@ -166,6 +178,7 @@ func (sh *ServerHost) registerStream(mst *Stream) error {
 	if ok {
 		return fmt.Errorf("stream %s already exists", mst.id)
 	}
+	sh.streamRegistry[mst.id] = mst
 	return nil
 }
 
