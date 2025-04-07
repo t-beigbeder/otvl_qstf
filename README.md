@@ -12,9 +12,9 @@ leaving to the AP the responsibility to relay the data chunks it reads from one 
 
 While a QUIC client can connect explicitly to an AP,
 direct connections to a QUIC server are also authorized by the library,
-anyway they will also implicitly make the client use the server as an AP.
-The enables to implement simple scenarios such as direct callback from the server to the client,
-but also more complex collaborations from/to a remote peer as well.
+anyway they will also implicitly enable the client to use the server as an AP.
+This allows for simple scenarios such as direct callback from the server to the client,
+but also more complex collaborations from/to a remote peer through the AP as well.
 
 The applications only deal with hosts, streams and functions.
 The QUIC connections required to open QUIC streams are managed by the library,
@@ -37,3 +37,12 @@ it will wait for a connection from the target host and open a stream with the sa
 When a function name is provided, a corresponding function must be registered on the host.
 It will be executed on stream acceptance,
 with access to the underlying stream that typically transports the function input data.
+
+## Implementation notes
+
+### Client host-id
+
+When connecting to a QUIC server for using it as an AP, a QUIC client has to explicitly call a function
+`IdentifyClient` that is intended to provide the server its host-id.
+It is otherwise considered as anonymous and will not be authorized to request opening streams with remote peers.
+The function `IdentifyClient` also tells the AP if the client is accepting having streams opened on itself.
