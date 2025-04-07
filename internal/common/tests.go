@@ -2,6 +2,8 @@ package common
 
 import (
 	"fmt"
+	"log/slog"
+	"os"
 	"slices"
 )
 
@@ -57,4 +59,12 @@ func BgLaunchErr(workload func() error, pe *error) chan struct{} {
 		*pe = workload()
 	}()
 	return done
+}
+
+func GetLogger() *slog.Logger {
+	return slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
+}
+
+func GetLoggerFor(app string) *slog.Logger {
+	return GetLogger().With("app", app)
 }

@@ -1,4 +1,4 @@
-package quic
+package quicutils
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 	"github.com/quic-go/quic-go"
 	"github.com/quic-go/quic-go/qlog"
 	"github.com/stretchr/testify/require"
+	"github.com/t-beigbeder/otvl_qstf/internal/common"
 	"github.com/t-beigbeder/otvl_qstf/internal/netutils"
 	"log/slog"
 	"os"
@@ -26,7 +27,7 @@ func TestGetConfigInsecureNoAlpn(t *testing.T) {
 	port, cancel, err := netutils.RunQuicTestServerFor("", cert, func(ctx context.Context, cn quic.Connection, _ *slog.Logger) {
 		fmt.Fprintf(os.Stderr, "TestGetConfigInsecureNoAlpn: %s\n", cn.LocalAddr().String())
 		flag = true
-	}, netutils.GetLoggerFor("server"))
+	}, common.GetLoggerFor("server"))
 	require.NoError(t, err)
 	defer cancel()
 	cnc, err := netutils.NewQuicConn("localhost:"+port, 0, tc, qc)
@@ -50,7 +51,7 @@ func TestGetConfigInsecureAlpn(t *testing.T) {
 	port, cancel, err := netutils.RunQuicTestServerFor("TestGetConfigInsecureAlpn", cert, func(ctx context.Context, cn quic.Connection, _ *slog.Logger) {
 		fmt.Fprintf(os.Stderr, "TestGetConfigInsecureAlpn: %s\n", cn.LocalAddr().String())
 		flag = true
-	}, netutils.GetLoggerFor("server"))
+	}, common.GetLoggerFor("server"))
 	require.NoError(t, err)
 	defer cancel()
 	cnc, err := netutils.NewQuicConn("localhost:"+port, 0, tc, qc)
@@ -70,13 +71,14 @@ func TestGetConfigSecureAlpn(t *testing.T) {
 		TlsOptions: TlsOptions{CertFile: cfs["svc"], KeyFile: cfs["svk"]},
 		Alpns:      netutils.NextProtosFor("TestGetConfigSecureAlpn"),
 	})
+	require.NoError(t, err)
 	require.NotNil(t, stc)
 	require.NotNil(t, sqc)
 	var flag bool
 	port, cancel, err := netutils.RunQuicTestServer(stc, sqc, func(ctx context.Context, cn quic.Connection, _ *slog.Logger) {
 		fmt.Fprintf(os.Stderr, "TestGetConfigSecureAlpn: %s\n", cn.LocalAddr().String())
 		flag = true
-	}, netutils.GetLoggerFor("server"))
+	}, common.GetLoggerFor("server"))
 	require.NoError(t, err)
 	defer cancel()
 
@@ -98,7 +100,7 @@ func TestGetConfigClientServerAlpn(t *testing.T) {
 	cfs, err := netutils.NewTestCerts(td, []string{"localhost"}, false)
 	require.NoError(t, err)
 	os.Setenv("QLOGDIR", td)
-	logger := netutils.GetLoggerFor("server")
+	logger := common.GetLoggerFor("server")
 	stc, sqc, err := GetConfig(&QuicOptions{
 		IsServer: true,
 		TlsOptions: TlsOptions{

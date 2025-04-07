@@ -166,7 +166,7 @@ func TestNewTestCerts(t *testing.T) {
 	if os.Getenv("QSTF_TEST_FULL") == "" {
 		t.Skip("QSTF_TEST_FULL not set")
 	}
-	logger := GetLoggerFor("TestNewTestCerts")
+	logger := common.GetLoggerFor("TestNewTestCerts")
 	os.Setenv("QSTF_TEST_CACHE", "")
 	td := t.TempDir()
 	logger.Info("TestNewTestCerts", "msg", "first no cache")

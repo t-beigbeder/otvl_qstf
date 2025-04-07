@@ -47,7 +47,7 @@ func RunQuicTestServerWithCtc(
 	go func() {
 		logger := logger
 		listener, ihost, iport, ierr := GetQuicListener(":0", stc, qc)
-		logger.Info("RunQuicTestServer: listening", "host", ihost, "port", iport)
+		logger.Info("RunQuicTestServerWithCtc: listening", "host", ihost, "port", iport)
 		if ierr != nil {
 			err = ierr
 			return
@@ -57,10 +57,10 @@ func RunQuicTestServerWithCtc(
 		for {
 			cnc, ierr := listener.Accept(ctx)
 			if ierr != nil {
-				logger.Error("RunQuicTestServer: accept error", "host", host, "port", iport, "err", ierr)
+				logger.Error("RunQuicTestServerWithCtc: accept error", "host", host, "port", iport, "err", ierr)
 				return
 			}
-			logger.Info("RunQuicTestServer: accepted connection", "host", host, "port", iport, "remoteAddr", cnc.RemoteAddr().String(), "checked", checked)
+			logger.Info("RunQuicTestServerWithCtc: accepted connection", "host", host, "port", iport, "remoteAddr", cnc.RemoteAddr().String(), "checked", checked)
 			if checked {
 				doer(ctx, cnc, logger)
 			} else {
@@ -83,7 +83,7 @@ func RunQuicTestServerWithCtc(
 		lastErr = ierr
 	}
 	if !ready && err == nil {
-		err = fmt.Errorf("RunQuicTestServer: failed to connect to %s:%s err %v", host, port, lastErr)
+		err = fmt.Errorf("RunQuicTestServerWithCtc: failed to connect to %s:%s err %v", host, port, lastErr)
 	}
 	if err != nil {
 		cancel()
@@ -109,14 +109,6 @@ func RunQuicTestServerFor(
 ) (string, context.CancelFunc, error) {
 	tc, qc := GetQuicConfigFor(cert, alpn, logger)
 	return RunQuicTestServer(tc, qc, doer, logger)
-}
-
-func GetLogger() *slog.Logger {
-	return slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
-}
-
-func GetLoggerFor(app string) *slog.Logger {
-	return GetLogger().With("app", app)
 }
 
 func getCertDirs(testDir string, hosts []string) (string, string, string, string) {

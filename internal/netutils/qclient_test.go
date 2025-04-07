@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/quic-go/quic-go"
 	"github.com/stretchr/testify/require"
+	"github.com/t-beigbeder/otvl_qstf/internal/common"
 	"log/slog"
 	"os"
 	"testing"
@@ -17,7 +18,7 @@ func TestGetQuicConnBasic(t *testing.T) {
 	require.NoError(t, err)
 	port, cancel, err := RunQuicTestServerFor("TestGetQuicConnBasic", cert, func(ctx context.Context, cn quic.Connection, _ *slog.Logger) {
 		fmt.Fprintf(os.Stderr, "TestGetQuicConn: %s\n", cn.LocalAddr().String())
-	}, GetLoggerFor("server"))
+	}, common.GetLoggerFor("server"))
 	require.NoError(t, err)
 	defer cancel()
 	tc := &tls.Config{NextProtos: []string{"TestGetQuicConnBasic"}, InsecureSkipVerify: true}
@@ -34,7 +35,7 @@ func TestGetQuicConnNoAlpn(t *testing.T) {
 	require.NoError(t, err)
 	port, cancel, err := RunQuicTestServerFor("", cert, func(ctx context.Context, cn quic.Connection, _ *slog.Logger) {
 		fmt.Fprintf(os.Stderr, "TestGetQuicConn: %s\n", cn.LocalAddr().String())
-	}, GetLoggerFor("server"))
+	}, common.GetLoggerFor("server"))
 	require.NoError(t, err)
 	defer cancel()
 	tc := &tls.Config{InsecureSkipVerify: true}
