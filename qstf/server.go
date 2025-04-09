@@ -23,18 +23,19 @@ type ServerHost struct {
 	lst            *quic.Listener
 	mx             sync.Mutex
 	funcRegistry   map[string]func(any) any
-	streamRegistry map[uuid.UUID]*Stream
+	streamRegistry map[uuid.UUID]*RStream
 	HostId         string
 }
 
-// NewServerHost creates host with given hostId to accept connections
+// NewServerHost creates host with given hostId to accept QUIC stream openings
+// from remote peers on accepted QUIC connections
 func NewServerHost(ctx context.Context, logger *slog.Logger, lst *quic.Listener, hostId string) *ServerHost {
 	sh := &ServerHost{
 		ctx:            ctx,
 		logger:         logger.With("hostId", hostId),
 		lst:            lst,
 		funcRegistry:   make(map[string]func(any) any),
-		streamRegistry: make(map[uuid.UUID]*Stream),
+		streamRegistry: make(map[uuid.UUID]*RStream),
 		HostId:         hostId,
 	}
 	go sh.accept()
@@ -100,19 +101,41 @@ func (sh *ServerHost) accept() {
 	}
 }
 
-type Stream struct {
+func (sh *ServerHost) registerStream(mst *RStream) error {
+	sh.mx.Lock()
+	defer sh.mx.Unlock()
+	_, ok := sh.streamRegistry[mst.id]
+	if ok {
+		return fmt.Errorf("stream %s already exists", mst.id)
+	}
+	sh.streamRegistry[mst.id] = mst
+	return nil
+}
+
+func (sh *ServerHost) unregisterStream(mst *RStream) error {
+	sh.mx.Lock()
+	defer sh.mx.Unlock()
+	_, ok := sh.streamRegistry[mst.id]
+	if !ok {
+		return fmt.Errorf("stream %s doesn't exist", mst.id)
+	}
+	delete(sh.streamRegistry, mst.id)
+	return nil
+}
+
+type RStream struct {
 	sh *ServerHost
 	rs quic.ReceiveStream
 	id uuid.UUID
 }
 
-var _ quic.ReceiveStream = &Stream{}
+var _ quic.ReceiveStream = &RStream{}
 
-func (mst *Stream) StreamID() quic.StreamID {
+func (mst *RStream) StreamID() quic.StreamID {
 	return mst.rs.StreamID()
 }
 
-func (mst *Stream) Read(p []byte) (int, error) {
+func (mst *RStream) Read(p []byte) (int, error) {
 	n, err := mst.rs.Read(p)
 	if err != nil {
 		iErr := mst.sh.unregisterStream(mst)
@@ -123,7 +146,7 @@ func (mst *Stream) Read(p []byte) (int, error) {
 	return n, err
 }
 
-func (mst *Stream) CancelRead(code quic.StreamErrorCode) {
+func (mst *RStream) CancelRead(code quic.StreamErrorCode) {
 	mst.rs.CancelRead(code)
 	iErr := mst.sh.unregisterStream(mst)
 	if iErr != nil {
@@ -131,7 +154,7 @@ func (mst *Stream) CancelRead(code quic.StreamErrorCode) {
 	}
 }
 
-func (mst *Stream) SetReadDeadline(t time.Time) error {
+func (mst *RStream) SetReadDeadline(t time.Time) error {
 	return mst.rs.SetReadDeadline(t)
 }
 
@@ -157,7 +180,7 @@ func (sh *ServerHost) initStream(st quic.ReceiveStream) {
 		sh.logger.Error("func does not exist", "funcName", fn)
 		return
 	}
-	mst := &Stream{sh: sh, rs: st, id: stId}
+	mst := &RStream{sh: sh, rs: st, id: stId}
 	err = sh.registerStream(mst)
 	if err != nil {
 		sh.logger.Error("initStream error", "err", err)
@@ -169,26 +192,4 @@ func (sh *ServerHost) initStream(st quic.ReceiveStream) {
 	}
 	sh.logger.Info("initStream ok", "id", stId, "funcName", fn)
 	// FIXME: initialize a pipeline and registers the flow
-}
-
-func (sh *ServerHost) registerStream(mst *Stream) error {
-	sh.mx.Lock()
-	defer sh.mx.Unlock()
-	_, ok := sh.streamRegistry[mst.id]
-	if ok {
-		return fmt.Errorf("stream %s already exists", mst.id)
-	}
-	sh.streamRegistry[mst.id] = mst
-	return nil
-}
-
-func (sh *ServerHost) unregisterStream(mst *Stream) error {
-	sh.mx.Lock()
-	defer sh.mx.Unlock()
-	_, ok := sh.streamRegistry[mst.id]
-	if !ok {
-		return fmt.Errorf("stream %s doesn't exist", mst.id)
-	}
-	delete(sh.streamRegistry, mst.id)
-	return nil
 }
