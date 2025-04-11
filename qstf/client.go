@@ -2,9 +2,11 @@ package qstf
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/quic-go/quic-go"
+	"github.com/t-beigbeder/otvl_qstf/qstf/quicutils"
 	"log/slog"
 	"sync"
 	"time"
@@ -15,17 +17,76 @@ type serverId struct {
 	hostId string
 }
 
+type ServerId interface {
+	Addr() string
+	HostId() string
+}
+
+var _ ServerId = &serverId{}
+
+func NewServerId(addr, hostId string) (ServerId, error) {
+	if hostId == "" {
+		uuid, err := uuid.NewV7()
+		if err != nil {
+			return nil, err
+		}
+		hostId = uuid.String()
+	}
+	sid := &serverId{
+		addr:   addr,
+		hostId: hostId,
+	}
+	return sid, nil
+}
+
+func (s *serverId) Addr() string {
+	return s.addr
+}
+
+func (s *serverId) HostId() string {
+	return s.hostId
+}
+
+type connector struct {
+	appProxy *connector
+	qo       *quicutils.QuicOptions
+	addr     string
+	id       uuid.UUID
+	qc       quic.Connection
+}
+
 type ClientHost struct {
 	ctx            context.Context
 	logger         *slog.Logger
 	mx             sync.Mutex
-	HostId         string
-	serverRegistry map[serverId]quic.Connection
+	cnRegistry     map[uuid.UUID]*connector
 	streamRegistry map[uuid.UUID]*WStream
+	HostId         string
 }
 
-func NewClientHost(ctx context.Context, hostId string) *ClientHost {
-	return nil // FIXME
+func NewClientHost(ctx context.Context, logger *slog.Logger, hostId string) *ClientHost {
+	ch := &ClientHost{
+		ctx:            ctx,
+		logger:         logger,
+		cnRegistry:     make(map[uuid.UUID]*connector),
+		streamRegistry: make(map[uuid.UUID]*WStream),
+		HostId:         hostId,
+	}
+	return ch
+}
+
+func (ch *ClientHost) OpenStream(ctx context.Context, sid ServerId) (*WStream, error) {
+	var (
+		qc quic.Connection
+		ok bool
+	)
+	if sid.HostId() == "" {
+		qc, ok = ch.serverRegistry[sid.HostId()]
+		if !ok {
+			qc, err := ch.connect()
+		}
+	}
+	return nil, errors.New("not implemented")
 }
 
 func (ch *ClientHost) registerStream(mst *WStream) error {
