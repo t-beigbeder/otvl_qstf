@@ -2,64 +2,76 @@ package qstf
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/quic-go/quic-go"
+	"github.com/t-beigbeder/otvl_qstf/internal/netutils"
 	"github.com/t-beigbeder/otvl_qstf/qstf/quicutils"
 	"log/slog"
 	"sync"
 	"time"
 )
 
-type serverId struct {
-	addr   string
-	hostId string
-}
-
-type ServerId interface {
-	Addr() string
-	HostId() string
-}
-
-var _ ServerId = &serverId{}
-
-func NewServerId(addr, hostId string) (ServerId, error) {
-	if hostId == "" {
-		uuid, err := uuid.NewV7()
-		if err != nil {
-			return nil, err
-		}
-		hostId = uuid.String()
-	}
-	sid := &serverId{
-		addr:   addr,
-		hostId: hostId,
-	}
-	return sid, nil
-}
-
-func (s *serverId) Addr() string {
-	return s.addr
-}
-
-func (s *serverId) HostId() string {
-	return s.hostId
-}
-
 type connector struct {
 	appProxy *connector
-	qo       *quicutils.QuicOptions
+	tcg      *tls.Config
+	qcg      *quic.Config
+	dto      time.Duration
 	addr     string
 	id       uuid.UUID
-	qc       quic.Connection
+	qcn      quic.Connection
+}
+
+type Connector interface {
+	HostId() string
+	getId() uuid.UUID
+}
+
+var _ Connector = &connector{}
+
+func (cnt *connector) HostId() string {
+	return cnt.id.String()
+}
+
+func (cnt *connector) getId() uuid.UUID {
+	return cnt.id
+}
+
+func NewConnector(addr, hostId string, qo *quicutils.QuicOptions, dialTimeout time.Duration) (Connector, error) {
+	var (
+		id  uuid.UUID
+		tcg *tls.Config
+		qcg *quic.Config
+		err error
+	)
+	if hostId != "" {
+		id, err = uuid.Parse(hostId)
+	} else {
+		id, err = uuid.NewV7()
+	}
+	if err != nil {
+		return nil, err
+	}
+	if tcg, qcg, err = quicutils.GetConfig(qo); err != nil {
+		return nil, err
+	}
+	cnr := &connector{
+		tcg:  tcg,
+		qcg:  qcg,
+		dto:  dialTimeout,
+		addr: addr,
+		id:   id,
+	}
+	return cnr, nil
 }
 
 type ClientHost struct {
 	ctx            context.Context
 	logger         *slog.Logger
 	mx             sync.Mutex
-	cnRegistry     map[uuid.UUID]*connector
+	cntRegistry    map[uuid.UUID]*connector
 	streamRegistry map[uuid.UUID]*WStream
 	HostId         string
 }
@@ -68,25 +80,60 @@ func NewClientHost(ctx context.Context, logger *slog.Logger, hostId string) *Cli
 	ch := &ClientHost{
 		ctx:            ctx,
 		logger:         logger,
-		cnRegistry:     make(map[uuid.UUID]*connector),
+		cntRegistry:    make(map[uuid.UUID]*connector),
 		streamRegistry: make(map[uuid.UUID]*WStream),
 		HostId:         hostId,
 	}
 	return ch
 }
 
-func (ch *ClientHost) OpenStream(ctx context.Context, sid ServerId) (*WStream, error) {
+func (ch *ClientHost) OpenStream(ctx context.Context, cnti Connector) (*WStream, error) {
 	var (
-		qc quic.Connection
-		ok bool
+		cnt *connector
+		qcn quic.Connection
+		ok  bool
+		err error
 	)
-	if sid.HostId() == "" {
-		qc, ok = ch.serverRegistry[sid.HostId()]
+	cnt, ok = ch.cntRegistry[cnti.getId()]
+	if !ok {
+		cnt, ok = cnti.(*connector)
 		if !ok {
-			qc, err := ch.connect()
+			return nil, fmt.Errorf("not a connector {%T}", cnti)
+		}
+		if err = ch.registerCnt(cnt); err != nil {
+			return nil, err
 		}
 	}
+	if cnt.qcn == nil {
+		qcn, err = netutils.NewQuicConn(cnt.addr, cnt.dto, cnt.tcg, cnt.qcg)
+		if err != nil {
+			return nil, err
+		}
+		cnt.qcn = qcn
+	}
 	return nil, errors.New("not implemented")
+}
+
+func (ch *ClientHost) registerCnt(cnt *connector) error {
+	ch.mx.Lock()
+	defer ch.mx.Unlock()
+	_, ok := ch.cntRegistry[cnt.id]
+	if ok {
+		return fmt.Errorf("connector %s already exists", cnt.id)
+	}
+	ch.cntRegistry[cnt.id] = cnt
+	return nil
+}
+
+func (ch *ClientHost) unregisterCnt(cnt *connector) error {
+	ch.mx.Lock()
+	defer ch.mx.Unlock()
+	_, ok := ch.cntRegistry[cnt.id]
+	if !ok {
+		return fmt.Errorf("connector %s doesn't exist", cnt.id)
+	}
+	delete(ch.cntRegistry, cnt.id)
+	return nil
 }
 
 func (ch *ClientHost) registerStream(mst *WStream) error {
@@ -132,6 +179,11 @@ func (mst *WStream) Write(p []byte) (int, error) {
 func (mst *WStream) Close() error {
 	err := mst.ss.Close()
 	mst.onError(err)
+	err = mst.ch.unregisterStream(mst)
+	if err != nil {
+		mst.ch.logger.Error("unregisterStream error", "err", err)
+		return err
+	}
 	return nil
 }
 
