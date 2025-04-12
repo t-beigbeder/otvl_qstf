@@ -3,7 +3,6 @@ package qstf
 import (
 	"context"
 	"crypto/tls"
-	"errors"
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/quic-go/quic-go"
@@ -22,6 +21,7 @@ type connector struct {
 	addr     string
 	id       uuid.UUID
 	qcn      quic.Connection
+	logger   *slog.Logger
 }
 
 type Connector interface {
@@ -39,7 +39,7 @@ func (cnt *connector) getId() uuid.UUID {
 	return cnt.id
 }
 
-func NewConnector(addr, hostId string, qo *quicutils.QuicOptions, dialTimeout time.Duration) (Connector, error) {
+func (ch *ClientHost) AddConnector(addr, hostId string, qo *quicutils.QuicOptions, dialTimeout time.Duration) (Connector, error) {
 	var (
 		id  uuid.UUID
 		tcg *tls.Config
@@ -58,17 +58,17 @@ func NewConnector(addr, hostId string, qo *quicutils.QuicOptions, dialTimeout ti
 		return nil, err
 	}
 	cnr := &connector{
-		tcg:  tcg,
-		qcg:  qcg,
-		dto:  dialTimeout,
-		addr: addr,
-		id:   id,
+		tcg:    tcg,
+		qcg:    qcg,
+		dto:    dialTimeout,
+		addr:   addr,
+		id:     id,
+		logger: ch.logger.With("addr", addr, "id", id),
 	}
 	return cnr, nil
 }
 
 type ClientHost struct {
-	ctx            context.Context
 	logger         *slog.Logger
 	mx             sync.Mutex
 	cntRegistry    map[uuid.UUID]*connector
@@ -76,9 +76,8 @@ type ClientHost struct {
 	HostId         string
 }
 
-func NewClientHost(ctx context.Context, logger *slog.Logger, hostId string) *ClientHost {
+func NewClientHost(logger *slog.Logger, hostId string) *ClientHost {
 	ch := &ClientHost{
-		ctx:            ctx,
 		logger:         logger,
 		cntRegistry:    make(map[uuid.UUID]*connector),
 		streamRegistry: make(map[uuid.UUID]*WStream),
@@ -87,13 +86,23 @@ func NewClientHost(ctx context.Context, logger *slog.Logger, hostId string) *Cli
 	return ch
 }
 
-func (ch *ClientHost) OpenStream(ctx context.Context, cnti Connector) (*WStream, error) {
+func (ch *ClientHost) OpenStream(cnti Connector, streamId string) (*WStream, error) {
 	var (
+		id  uuid.UUID
 		cnt *connector
 		qcn quic.Connection
 		ok  bool
+		ss  quic.SendStream
 		err error
 	)
+	if streamId != "" {
+		id, err = uuid.Parse(streamId)
+	} else {
+		id, err = uuid.NewV7()
+	}
+	if err != nil {
+		return nil, err
+	}
 	cnt, ok = ch.cntRegistry[cnti.getId()]
 	if !ok {
 		cnt, ok = cnti.(*connector)
@@ -105,13 +114,31 @@ func (ch *ClientHost) OpenStream(ctx context.Context, cnti Connector) (*WStream,
 		}
 	}
 	if cnt.qcn == nil {
+		cnt.logger.Info("newQuicConn")
 		qcn, err = netutils.NewQuicConn(cnt.addr, cnt.dto, cnt.tcg, cnt.qcg)
 		if err != nil {
+			cnt.logger.Error("newQuicConn", "err", err)
 			return nil, err
 		}
 		cnt.qcn = qcn
 	}
-	return nil, errors.New("not implemented")
+	qcn = cnt.qcn
+	if ss, err = qcn.OpenUniStream(); err != nil {
+		cnt.logger.Error("openUniStream", "err", err)
+		return nil, err
+	}
+	mst := &WStream{
+		ch:     ch,
+		qcn:    qcn,
+		logger: cnt.logger.With("host", cnt.HostId()),
+		ss:     ss,
+		id:     id,
+	}
+	if err = ch.registerStream(mst); err != nil {
+		cnt.logger.Error("registerStream", "err", err)
+		return nil, err
+	}
+	return mst, nil
 }
 
 func (ch *ClientHost) registerCnt(cnt *connector) error {
@@ -159,9 +186,11 @@ func (ch *ClientHost) unregisterStream(mst *WStream) error {
 }
 
 type WStream struct {
-	ch *ClientHost
-	ss quic.SendStream
-	id uuid.UUID
+	ch     *ClientHost
+	qcn    quic.Connection
+	logger *slog.Logger
+	ss     quic.SendStream
+	id     uuid.UUID
 }
 
 var _ quic.SendStream = &WStream{}
@@ -172,19 +201,28 @@ func (mst *WStream) StreamID() quic.StreamID {
 
 func (mst *WStream) Write(p []byte) (int, error) {
 	n, err := mst.ss.Write(p)
-	mst.onError(err)
+	mst.onError("write", err)
 	return n, err
 }
 
 func (mst *WStream) Close() error {
 	err := mst.ss.Close()
-	mst.onError(err)
-	err = mst.ch.unregisterStream(mst)
-	if err != nil {
-		mst.ch.logger.Error("unregisterStream error", "err", err)
-		return err
+	mst.onError("close", err)
+	iErr := mst.ch.unregisterStream(mst)
+	if iErr != nil {
+		mst.logger.Error("unregisterStream error", "err", iErr)
 	}
-	return nil
+	if len(mst.ch.streamRegistry) == 0 {
+		sErr := ""
+		if err != nil {
+			sErr = err.Error()
+		}
+		iErr = mst.qcn.CloseWithError(0, sErr)
+		if iErr != nil {
+			mst.ch.logger.Error("closeWithError error", "err", iErr)
+		}
+	}
+	return err
 }
 
 func (mst *WStream) CancelWrite(code quic.StreamErrorCode) {
@@ -199,12 +237,13 @@ func (mst *WStream) SetWriteDeadline(t time.Time) error {
 	return mst.ss.SetWriteDeadline(t)
 }
 
-func (mst *WStream) onError(err error) {
+func (mst *WStream) onError(from string, err error) {
 	if err == nil {
 		return
 	}
+	mst.ch.logger.Error(fmt.Sprintf("%s error", from), "err", err)
 	iErr := mst.ch.unregisterStream(mst)
 	if iErr != nil {
-		mst.ch.logger.Error("unregisterStream error", "err", iErr)
+		mst.logger.Error("unregisterStream error", "err", iErr)
 	}
 }
