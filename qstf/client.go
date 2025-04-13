@@ -19,40 +19,51 @@ type connector struct {
 	qcg      *quic.Config
 	dto      time.Duration
 	addr     string
-	id       uuid.UUID
+	hostId   string
+	uid      uuid.UUID
 	qcn      quic.Connection
 	logger   *slog.Logger
 }
 
 type Connector interface {
 	HostId() string
-	getId() uuid.UUID
+	getUuid() uuid.UUID
 }
 
 var _ Connector = &connector{}
 
 func (cnt *connector) HostId() string {
-	return cnt.id.String()
+	return cnt.hostId
 }
 
-func (cnt *connector) getId() uuid.UUID {
-	return cnt.id
+func (cnt *connector) getUuid() uuid.UUID {
+	return cnt.uid
 }
 
 func (ch *ClientHost) AddConnector(addr, hostId string, qo *quicutils.QuicOptions, dialTimeout time.Duration) (Connector, error) {
 	var (
-		id  uuid.UUID
-		tcg *tls.Config
-		qcg *quic.Config
-		err error
+		uid    uuid.UUID
+		uidSet bool
+		tcg    *tls.Config
+		qcg    *quic.Config
+		err    error
 	)
 	if hostId != "" {
-		id, err = uuid.Parse(hostId)
-	} else {
-		id, err = uuid.NewV7()
+		uid, err = uuid.Parse(hostId)
+		if err == nil {
+			uidSet = true
+		}
 	}
-	if err != nil {
-		return nil, err
+	if hostId == "" || !uidSet {
+		uid, err = uuid.NewV7()
+		if err == nil {
+			uidSet = true
+		} else {
+			return nil, err
+		}
+	}
+	if hostId == "" {
+		hostId = uid.String()
 	}
 	if tcg, qcg, err = quicutils.GetConfig(qo); err != nil {
 		return nil, err
@@ -62,8 +73,9 @@ func (ch *ClientHost) AddConnector(addr, hostId string, qo *quicutils.QuicOption
 		qcg:    qcg,
 		dto:    dialTimeout,
 		addr:   addr,
-		id:     id,
-		logger: ch.logger.With("addr", addr, "id", id),
+		hostId: hostId,
+		uid:    uid,
+		logger: ch.logger.With("addr", addr, "hostId", hostId),
 	}
 	return cnr, nil
 }
@@ -103,7 +115,7 @@ func (ch *ClientHost) OpenStream(cnti Connector, streamId string) (*WStream, err
 	if err != nil {
 		return nil, err
 	}
-	cnt, ok = ch.cntRegistry[cnti.getId()]
+	cnt, ok = ch.cntRegistry[cnti.getUuid()]
 	if !ok {
 		cnt, ok = cnti.(*connector)
 		if !ok {
@@ -144,22 +156,22 @@ func (ch *ClientHost) OpenStream(cnti Connector, streamId string) (*WStream, err
 func (ch *ClientHost) registerCnt(cnt *connector) error {
 	ch.mx.Lock()
 	defer ch.mx.Unlock()
-	_, ok := ch.cntRegistry[cnt.id]
+	_, ok := ch.cntRegistry[cnt.uid]
 	if ok {
-		return fmt.Errorf("connector %s already exists", cnt.id)
+		return fmt.Errorf("connector %s already exists", cnt.uid)
 	}
-	ch.cntRegistry[cnt.id] = cnt
+	ch.cntRegistry[cnt.uid] = cnt
 	return nil
 }
 
 func (ch *ClientHost) unregisterCnt(cnt *connector) error {
 	ch.mx.Lock()
 	defer ch.mx.Unlock()
-	_, ok := ch.cntRegistry[cnt.id]
+	_, ok := ch.cntRegistry[cnt.uid]
 	if !ok {
-		return fmt.Errorf("connector %s doesn't exist", cnt.id)
+		return fmt.Errorf("connector %s doesn't exist", cnt.uid)
 	}
-	delete(ch.cntRegistry, cnt.id)
+	delete(ch.cntRegistry, cnt.uid)
 	return nil
 }
 
