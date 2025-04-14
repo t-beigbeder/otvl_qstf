@@ -9,7 +9,6 @@ import (
 	"io"
 	"log/slog"
 	"sync"
-	"time"
 )
 
 const (
@@ -123,17 +122,18 @@ func (sh *ServerHost) unregisterStream(mst *RStream) error {
 	return nil
 }
 
+type Canceler interface {
+	Cancel(code quic.StreamErrorCode)
+}
+
 type RStream struct {
 	sh *ServerHost
 	rs quic.ReceiveStream
 	id uuid.UUID
 }
 
-var _ quic.ReceiveStream = &RStream{}
-
-func (mst *RStream) StreamID() quic.StreamID {
-	return mst.rs.StreamID()
-}
+var _ io.Reader = &RStream{}
+var _ Canceler = &RStream{}
 
 func (mst *RStream) Read(p []byte) (int, error) {
 	n, err := mst.rs.Read(p)
@@ -146,16 +146,12 @@ func (mst *RStream) Read(p []byte) (int, error) {
 	return n, err
 }
 
-func (mst *RStream) CancelRead(code quic.StreamErrorCode) {
+func (mst *RStream) Cancel(code quic.StreamErrorCode) {
 	mst.rs.CancelRead(code)
 	iErr := mst.sh.unregisterStream(mst)
 	if iErr != nil {
 		mst.sh.logger.Error("unregisterStream error", "err", iErr)
 	}
-}
-
-func (mst *RStream) SetReadDeadline(t time.Time) error {
-	return mst.rs.SetReadDeadline(t)
 }
 
 func (sh *ServerHost) initStream(st quic.ReceiveStream) {

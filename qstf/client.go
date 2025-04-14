@@ -1,13 +1,13 @@
 package qstf
 
 import (
-	"context"
 	"crypto/tls"
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/quic-go/quic-go"
 	"github.com/t-beigbeder/otvl_qstf/internal/netutils"
 	"github.com/t-beigbeder/otvl_qstf/qstf/quicutils"
+	"io"
 	"log/slog"
 	"sync"
 	"time"
@@ -201,15 +201,14 @@ type WStream struct {
 	ch     *ClientHost
 	qcn    quic.Connection
 	logger *slog.Logger
+	mx     sync.Mutex
+	closed bool
 	ss     quic.SendStream
 	id     uuid.UUID
 }
 
-var _ quic.SendStream = &WStream{}
-
-func (mst *WStream) StreamID() quic.StreamID {
-	return mst.ss.StreamID()
-}
+var _ io.WriteCloser = &WStream{}
+var _ Canceler = &WStream{}
 
 func (mst *WStream) Write(p []byte) (int, error) {
 	n, err := mst.ss.Write(p)
@@ -217,9 +216,15 @@ func (mst *WStream) Write(p []byte) (int, error) {
 	return n, err
 }
 
-func (mst *WStream) Close() error {
-	err := mst.ss.Close()
-	mst.onError("close", err)
+func (mst *WStream) close(cancel bool) error {
+	mst.mx.Lock()
+	defer mst.mx.Unlock()
+	var err error
+	if !mst.closed && !cancel {
+		err = mst.ss.Close()
+		mst.onError("close", err)
+	}
+	mst.closed = true
 	iErr := mst.ch.unregisterStream(mst)
 	if iErr != nil {
 		mst.logger.Error("unregisterStream error", "err", iErr)
@@ -237,16 +242,13 @@ func (mst *WStream) Close() error {
 	return err
 }
 
-func (mst *WStream) CancelWrite(code quic.StreamErrorCode) {
+func (mst *WStream) Close() error {
+	return mst.close(false)
+}
+
+func (mst *WStream) Cancel(code quic.StreamErrorCode) {
 	mst.ss.CancelWrite(code)
-}
-
-func (mst *WStream) Context() context.Context {
-	return mst.ss.Context()
-}
-
-func (mst *WStream) SetWriteDeadline(t time.Time) error {
-	return mst.ss.SetWriteDeadline(t)
+	_ = mst.close(true)
 }
 
 func (mst *WStream) onError(from string, err error) {

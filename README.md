@@ -14,7 +14,7 @@ While a QUIC client can connect explicitly to an AP,
 direct connections to a QUIC server are also authorized by the library,
 anyway they will also implicitly enable the client to use the server as an AP.
 This allows for simple scenarios such as direct callback from the server to the client,
-but also more complex collaborations from/to a remote peer through the AP as well.
+but also for more complex collaborations from/to a remote peer through the AP.
 
 The applications only deal with hosts, streams and functions.
 The QUIC connections required to open QUIC streams are managed by the library,
@@ -46,3 +46,9 @@ When connecting to a QUIC server for using it as an AP, a QUIC client has to exp
 `$Sys$IdentifyClient` that is intended to provide the server its host-id.
 It is otherwise considered as anonymous and will not be authorized to request opening streams with remote peers.
 The function `$Sys$IdentifyClient` also tells the AP if the client is accepting having streams opened on itself.
+
+### Streams
+
+Opened streams present a WriteCloser interface, accepted streams a Reader interface.
+Both also present an interface to abort operations on the stream with an error code,
+which unblock them immediately.
