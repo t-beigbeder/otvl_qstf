@@ -12,12 +12,13 @@ import (
 	"time"
 )
 
-func RunQstfTestServerWithCtc(
+const testHost = "localhost"
+
+func RunQstfTestServer(
 	testDir string,
-	logger *slog.Logger,
+	configureServer func(*ServerHost) error,
 ) (*ServerHost, string, context.CancelFunc, map[string]string, error) {
 	ctx, cancel := context.WithCancel(context.Background())
-	const testHost = "localhost"
 	var (
 		cfs        map[string]string
 		err        error
@@ -45,15 +46,12 @@ func RunQstfTestServerWithCtc(
 	if err != nil {
 		return nil, "", nil, nil, err
 	}
-	if logger == nil {
-		logger = common.GetLoggerFor("test-server")
-	}
-	logger.Info("RunQstfTestServerWithCtc: listening", "host", host, "port", port)
+	logger := common.GetLoggerFor("test-server")
+	logger.Info("RunQstfTestServer: listening", "host", host, "port", port)
 	sh := NewServerHost(ctx, logger, listener, "test-server-id")
 
 	ready := err != nil
 	var lastErr error
-	time.Sleep(10 * time.Millisecond)
 	ctc := &tls.Config{NextProtos: stc.NextProtos, InsecureSkipVerify: true}
 	for cc := 0; cc < 3 && !ready; cc++ {
 		timeout := time.Duration(20*(cc+1)) * time.Millisecond
@@ -67,7 +65,44 @@ func RunQstfTestServerWithCtc(
 		lastErr = ierr
 	}
 	if !ready && err == nil {
-		err = fmt.Errorf("RunQstfTestServerWithCtc: failed to connect to %s:%s err %v", host, port, lastErr)
+		err = fmt.Errorf("runQstfTestServerWithCtc: failed to connect to %s:%s err %v", host, port, lastErr)
+	}
+	if configureServer != nil {
+		if err = configureServer(sh); err != nil {
+			return nil, "", nil, nil, err
+		}
 	}
 	return sh, port, cancel, cfs, nil
+}
+
+func RunQstfTestClientServer(
+	testDir string,
+	configureServer func(*ServerHost) error,
+	clientDoer func(*ClientHost, Connector, *slog.Logger) error,
+) (context.CancelFunc, error) {
+	sh, port, cancel, cfs, err := RunQstfTestServer(testDir, configureServer)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err != nil {
+			cancel()
+		}
+	}()
+	logger := common.GetLoggerFor("test-client")
+	ch := NewClientHost(logger, "TestClientBasicHostId")
+	qo := &quicutils.QuicOptions{
+		TlsOptions: quicutils.TlsOptions{CACertFile: cfs["cac"]},
+		Alpns:      netutils.NextProtosFor(QstfAlpn),
+	}
+	cnt, err := NewConnector(testHost+":"+port, sh.HostId, qo, 0, logger)
+	if err != nil {
+		return nil, err
+	}
+
+	err = clientDoer(ch, cnt, logger)
+	if err != nil {
+		return nil, err
+	}
+	return cancel, nil
 }

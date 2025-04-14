@@ -21,7 +21,7 @@ type ServerHost struct {
 	logger         *slog.Logger
 	lst            *quic.Listener
 	mx             sync.Mutex
-	funcRegistry   map[string]func(any) any
+	funcRegistry   map[string]func(*RStream)
 	streamRegistry map[uuid.UUID]*RStream
 	HostId         string
 }
@@ -33,7 +33,7 @@ func NewServerHost(ctx context.Context, logger *slog.Logger, lst *quic.Listener,
 		ctx:            ctx,
 		logger:         logger.With("hostId", hostId),
 		lst:            lst,
-		funcRegistry:   make(map[string]func(any) any),
+		funcRegistry:   make(map[string]func(*RStream)),
 		streamRegistry: make(map[uuid.UUID]*RStream),
 		HostId:         hostId,
 	}
@@ -41,7 +41,7 @@ func NewServerHost(ctx context.Context, logger *slog.Logger, lst *quic.Listener,
 	return sh
 }
 
-func (sh *ServerHost) RegisterFunction(funcName string, f func(any) any) error {
+func (sh *ServerHost) RegisterFunction(funcName string, f func(*RStream)) error {
 	sh.mx.Lock()
 	defer sh.mx.Unlock()
 	_, ok := sh.funcRegistry[funcName]
@@ -52,7 +52,7 @@ func (sh *ServerHost) RegisterFunction(funcName string, f func(any) any) error {
 	return nil
 }
 
-func (sh *ServerHost) GetFunction(funcName string) func(any) any {
+func (sh *ServerHost) GetFunction(funcName string) func(*RStream) {
 	sh.mx.Lock()
 	defer sh.mx.Unlock()
 	fc, _ := sh.funcRegistry[funcName]
@@ -77,7 +77,7 @@ func (sh *ServerHost) accept() {
 			sh.logger.Error("accept error", "err", err)
 			return
 		}
-		sh.logger.Debug("accepted a connection", "conn", cnc)
+		sh.logger.Debug("accepted a connection", "remote", cnc.RemoteAddr().String())
 		go func() {
 			for {
 				st, err := cnc.AcceptStream(sh.ctx)
@@ -156,7 +156,6 @@ func (mst *RStream) Cancel(code quic.StreamErrorCode) {
 }
 
 func (sh *ServerHost) initStream(st quic.ReceiveStream) {
-	sh.logger.Debug("initStream", "st", st)
 	hid, err := common.LStReader(st)
 	if err != nil {
 		sh.logger.Error("read hostId error", "err", err)
@@ -174,9 +173,13 @@ func (sh *ServerHost) initStream(st quic.ReceiveStream) {
 		sh.logger.Error("read funcName error", "err", err)
 		return
 	}
-	if fn != "" && sh.GetFunction(fn) == nil {
-		sh.logger.Error("func does not exist", "funcName", fn)
-		return
+	sh.logger.Debug("initStream", "hostId", hid, "stId", stId, "fn", fn)
+	var fc func(*RStream)
+	if fn != "" {
+		if fc = sh.GetFunction(fn); fc == nil {
+			sh.logger.Error("func does not exist", "funcName", fn)
+			return
+		}
 	}
 	mst := &RStream{sh: sh, rs: st, id: stId}
 	err = sh.registerStream(mst)
@@ -189,5 +192,5 @@ func (sh *ServerHost) initStream(st quic.ReceiveStream) {
 		return
 	}
 	sh.logger.Info("initStream ok", "id", stId, "funcName", fn)
-	// FIXME: initialize a pipeline and registers the flow
+	fc(mst)
 }
