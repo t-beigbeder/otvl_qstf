@@ -60,6 +60,16 @@ func LStReader(rr io.Reader) (string, error) {
 	return string(ebs), nil
 }
 
+func LbsWriter(wr io.Writer, ebs []byte) error {
+	bs := Bs2LBs(ebs)
+	_, err := wr.Write(bs)
+	return err
+}
+
+func LstWriter(wr io.Writer, es string) error {
+	return LbsWriter(wr, []byte(es))
+}
+
 type I32Bs [4]byte
 
 func NewI32Bs(ln uint32) I32Bs {

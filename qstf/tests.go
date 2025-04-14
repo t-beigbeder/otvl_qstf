@@ -15,12 +15,12 @@ import (
 func RunQstfTestServerWithCtc(
 	testDir string,
 	logger *slog.Logger,
-) (*ServerHost, string, context.CancelFunc, error) {
+) (*ServerHost, string, context.CancelFunc, map[string]string, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	const testHost = "localhost"
 	var (
-		err        error
 		cfs        map[string]string
+		err        error
 		stc        *tls.Config
 		sqc        *quic.Config
 		listener   *quic.Listener
@@ -31,21 +31,19 @@ func RunQstfTestServerWithCtc(
 			cancel()
 		}
 	}()
-	cfs, err = netutils.NewTestCerts(testDir, []string{testHost}, false)
+	cfs, err = netutils.NewTestCerts(testDir, []string{testHost}, true)
 	if err != nil {
-		return nil, "", nil, err
+		return nil, "", nil, nil, err
 	}
 	stc, sqc, err = quicutils.GetConfig(&quicutils.QuicOptions{
 		IsServer:   true,
 		TlsOptions: quicutils.TlsOptions{CertFile: cfs["svc"], KeyFile: cfs["svk"]},
 		Alpns:      netutils.NextProtosFor(QstfAlpn),
 	})
-	if err != nil {
-		return nil, "", nil, err
-	}
+
 	listener, host, port, err = netutils.GetQuicListener(":0", stc, sqc)
 	if err != nil {
-		return nil, "", nil, err
+		return nil, "", nil, nil, err
 	}
 	if logger == nil {
 		logger = common.GetLoggerFor("test-server")
@@ -71,5 +69,5 @@ func RunQstfTestServerWithCtc(
 	if !ready && err == nil {
 		err = fmt.Errorf("RunQstfTestServerWithCtc: failed to connect to %s:%s err %v", host, port, lastErr)
 	}
-	return sh, port, cancel, nil
+	return sh, port, cancel, cfs, nil
 }

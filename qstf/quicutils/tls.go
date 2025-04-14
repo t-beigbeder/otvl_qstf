@@ -50,6 +50,8 @@ type QuicOptions struct {
 	KeepAlivePeriod time.Duration
 	// Tracer
 	Tracer func(context.Context, logging.Perspective, quic.ConnectionID) *logging.ConnectionTracer
+	// opens QUIC bidirectional streams
+	BidirStream bool
 
 	// TLS options
 	TlsOptions

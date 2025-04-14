@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/quic-go/quic-go"
+	"github.com/t-beigbeder/otvl_qstf/internal/common"
 	"github.com/t-beigbeder/otvl_qstf/internal/netutils"
 	"github.com/t-beigbeder/otvl_qstf/qstf/quicutils"
 	"io"
@@ -22,6 +23,7 @@ type connector struct {
 	hostId   string
 	uid      uuid.UUID
 	qcn      quic.Connection
+	bidir    bool
 	logger   *slog.Logger
 }
 
@@ -40,7 +42,7 @@ func (cnt *connector) getUuid() uuid.UUID {
 	return cnt.uid
 }
 
-func (ch *ClientHost) AddConnector(addr, hostId string, qo *quicutils.QuicOptions, dialTimeout time.Duration) (Connector, error) {
+func NewConnector(addr, hostId string, qo *quicutils.QuicOptions, dialTimeout time.Duration, logger *slog.Logger) (Connector, error) {
 	var (
 		uid    uuid.UUID
 		uidSet bool
@@ -75,7 +77,8 @@ func (ch *ClientHost) AddConnector(addr, hostId string, qo *quicutils.QuicOption
 		addr:   addr,
 		hostId: hostId,
 		uid:    uid,
-		logger: ch.logger.With("addr", addr, "hostId", hostId),
+		bidir:  qo.BidirStream,
+		logger: logger.With("addr", addr, "hostId", hostId),
 	}
 	return cnr, nil
 }
@@ -135,8 +138,21 @@ func (ch *ClientHost) OpenStream(cnti Connector, streamId string) (*WStream, err
 		cnt.qcn = qcn
 	}
 	qcn = cnt.qcn
-	if ss, err = qcn.OpenUniStream(); err != nil {
+	if cnt.bidir {
+		ss, err = qcn.OpenStream()
+	} else {
+		ss, err = qcn.OpenUniStream()
+	}
+	if err != nil {
 		cnt.logger.Error("openUniStream", "err", err)
+		return nil, err
+	}
+	if err = common.LstWriter(ss, cnt.hostId); err != nil {
+		cnt.logger.Error("openStream: lstWriter hostId", "err", err)
+		return nil, err
+	}
+	if _, err = ss.Write(id[:]); err != nil {
+		cnt.logger.Error("openStream: lstWriter streamId", "err", err)
 		return nil, err
 	}
 	mst := &WStream{

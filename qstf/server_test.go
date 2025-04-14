@@ -8,7 +8,7 @@ import (
 
 func TestNewServerHost(t *testing.T) {
 	td := t.TempDir()
-	sh, port, cancel, err := RunQstfTestServerWithCtc(td, nil)
+	sh, port, cancel, _, err := RunQstfTestServerWithCtc(td, nil)
 	require.NoError(t, err)
 	require.NotNil(t, sh)
 	require.NotNil(t, port)

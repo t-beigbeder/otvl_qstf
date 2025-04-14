@@ -43,9 +43,9 @@ with access to the underlying stream that typically transports the function inpu
 ### Client host-id
 
 When connecting to a QUIC server for using it as an AP, a QUIC client has to explicitly call a function
-`$Sys$IdentifyClient` that is intended to provide the server its host-id.
+`$Sys/IdentifyClient` that is intended to provide the server its host-id.
 It is otherwise considered as anonymous and will not be authorized to request opening streams with remote peers.
-The function `$Sys$IdentifyClient` also tells the AP if the client is accepting having streams opened on itself.
+The function `$Sys/IdentifyClient` also tells the AP if the client is accepting having streams opened on itself.
 
 ### Streams
 
