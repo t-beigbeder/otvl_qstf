@@ -27,12 +27,12 @@ func TestClientBasic(t *testing.T) {
 	cnt, err := NewConnector("localhost:"+port, sh.HostId, qo, 0, logger)
 	require.NoError(t, err)
 	require.NotNil(t, cnt)
-	st, err := ch.OpenStream(cnt, "")
+	st, err := ch.OpenStream(cnt, "", "theFunc")
 	require.NoError(t, err)
 	require.NotNil(t, st)
 	err = st.Close()
 	require.NoError(t, err)
-	time.Sleep(time.Millisecond * 10)
+	time.Sleep(time.Millisecond * 1000)
 	cancel()
 }
 

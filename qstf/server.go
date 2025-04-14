@@ -77,6 +77,7 @@ func (sh *ServerHost) accept() {
 			sh.logger.Error("accept error", "err", err)
 			return
 		}
+		sh.logger.Debug("accepted a connection", "conn", cnc)
 		go func() {
 			for {
 				st, err := cnc.AcceptStream(sh.ctx)
@@ -155,6 +156,7 @@ func (mst *RStream) Cancel(code quic.StreamErrorCode) {
 }
 
 func (sh *ServerHost) initStream(st quic.ReceiveStream) {
+	sh.logger.Debug("initStream", "st", st)
 	hid, err := common.LStReader(st)
 	if err != nil {
 		sh.logger.Error("read hostId error", "err", err)

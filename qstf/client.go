@@ -101,7 +101,7 @@ func NewClientHost(logger *slog.Logger, hostId string) *ClientHost {
 	return ch
 }
 
-func (ch *ClientHost) OpenStream(cnti Connector, streamId string) (*WStream, error) {
+func (ch *ClientHost) OpenStream(cnti Connector, streamId string, fName string) (*WStream, error) {
 	var (
 		id  uuid.UUID
 		cnt *connector
@@ -153,6 +153,10 @@ func (ch *ClientHost) OpenStream(cnti Connector, streamId string) (*WStream, err
 	}
 	if _, err = ss.Write(id[:]); err != nil {
 		cnt.logger.Error("openStream: lstWriter streamId", "err", err)
+		return nil, err
+	}
+	if err = common.LstWriter(ss, fName); err != nil {
+		cnt.logger.Error("openStream: lstWriter fName", "err", err)
 		return nil, err
 	}
 	mst := &WStream{
