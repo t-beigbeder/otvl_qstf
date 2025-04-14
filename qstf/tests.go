@@ -99,8 +99,17 @@ func RunQstfTestClientServer(
 	if err != nil {
 		return nil, err
 	}
+	stc, err := ch.OpenStream(cnt, "", "")
+	if err != nil {
+		return nil, err
+	}
 
 	err = clientDoer(ch, cnt, logger)
+	if err != nil {
+		return nil, err
+	}
+	time.Sleep(10 * time.Millisecond)
+	err = stc.Close()
 	if err != nil {
 		return nil, err
 	}

@@ -162,7 +162,7 @@ func (ch *ClientHost) OpenStream(cnti Connector, streamId string, fName string) 
 	mst := &WStream{
 		ch:     ch,
 		qcn:    qcn,
-		logger: cnt.logger.With("host", cnt.HostId()),
+		logger: cnt.logger.With("host", cnt.HostId(), "id", id, "fName", fName),
 		ss:     ss,
 		id:     id,
 	}
@@ -241,6 +241,7 @@ func (mst *WStream) close(cancel bool) error {
 	defer mst.mx.Unlock()
 	var err error
 	if !mst.closed && !cancel {
+		mst.logger.Debug("close")
 		err = mst.ss.Close()
 		mst.onError("close", err)
 	}
@@ -254,6 +255,7 @@ func (mst *WStream) close(cancel bool) error {
 		if err != nil {
 			sErr = err.Error()
 		}
+		mst.logger.Info("close QUIC connection", "err", sErr)
 		iErr = mst.qcn.CloseWithError(0, sErr)
 		if iErr != nil {
 			mst.ch.logger.Error("closeWithError error", "err", iErr)
