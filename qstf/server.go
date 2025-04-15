@@ -17,7 +17,6 @@ const (
 
 // A ServerHost accepts connections from other hosts and registers functions
 type ServerHost struct {
-	ctx            context.Context
 	logger         *slog.Logger
 	lst            *quic.Listener
 	mx             sync.Mutex
@@ -30,14 +29,13 @@ type ServerHost struct {
 // from remote peers on accepted QUIC connections
 func NewServerHost(ctx context.Context, logger *slog.Logger, lst *quic.Listener, hostId string) *ServerHost {
 	sh := &ServerHost{
-		ctx:            ctx,
 		logger:         logger.With("hostId", hostId),
 		lst:            lst,
 		funcRegistry:   make(map[string]func(*RStream)),
 		streamRegistry: make(map[uuid.UUID]*RStream),
 		HostId:         hostId,
 	}
-	go sh.accept()
+	go sh.accept(ctx)
 	return sh
 }
 
@@ -70,35 +68,40 @@ func (sh *ServerHost) UnregisterFunction(funcName string) error {
 	return nil
 }
 
-func (sh *ServerHost) accept() {
+func (sh *ServerHost) accept(ctx context.Context) {
 	for {
-		cnc, err := sh.lst.Accept(sh.ctx)
+		cnc, err := sh.lst.Accept(ctx)
 		if err != nil {
 			sh.logger.Error("accept error", "err", err)
 			return
 		}
 		sh.logger.Debug("accepted a connection", "remote", cnc.RemoteAddr().String())
-		go func() {
-			for {
-				st, err := cnc.AcceptStream(sh.ctx)
-				if err != nil {
-					sh.logger.Error("accept stream error", "err", err)
-					return
-				}
-				sh.initStream(st)
-			}
-		}()
-		go func() {
-			for {
-				st, err := cnc.AcceptUniStream(sh.ctx)
-				if err != nil {
-					sh.logger.Error("accept unistream error", "err", err)
-					return
-				}
-				sh.initStream(st)
-			}
-		}()
+		go sh.acceptStreams(ctx, cnc, false)
+		go sh.acceptStreams(ctx, cnc, true)
 	}
+}
+
+func (sh *ServerHost) acceptStreams(ctx context.Context, cnc quic.Connection, biDir bool) {
+	go func() {
+		for {
+			st, err := cnc.AcceptStream(ctx)
+			if err != nil {
+				sh.logger.Error("accept stream error", "err", err)
+				return
+			}
+			sh.initStream(st)
+		}
+	}()
+	go func() {
+		for {
+			st, err := cnc.AcceptUniStream(ctx)
+			if err != nil {
+				sh.logger.Error("accept unistream error", "err", err)
+				return
+			}
+			sh.initStream(st)
+		}
+	}()
 }
 
 func (sh *ServerHost) registerStream(mst *RStream) error {
