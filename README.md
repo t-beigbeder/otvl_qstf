@@ -52,3 +52,12 @@ The function `$Sys/IdentifyClient` also tells the AP if the client is accepting 
 Opened streams present a WriteCloser interface, accepted streams a Reader interface.
 Both also present an interface to abort operations on the stream with an error code,
 which unblock them immediately.
+
+## Work in progress
+
+    server
+      controller
+        connexion
+          controller
+            stream
+              function
