@@ -10,8 +10,8 @@ import (
 func TestClientBasic(t *testing.T) {
 	td := t.TempDir()
 	cancel, err := RunQstfTestClientServer(td,
-		func(sh *ServerHost) error {
-			if err := sh.RegisterFunction("theFunc1", func(r *RStream) {
+		func(sh ServerHost) error {
+			if err := sh.RegisterFunction("theFunc1", func(r *rStream) {
 				logger := common.GetLoggerFor("theApp")
 				ist, err := common.LStReader(r)
 				if err != nil {
@@ -22,7 +22,7 @@ func TestClientBasic(t *testing.T) {
 			}); err != nil {
 				return err
 			}
-			if err := sh.RegisterFunction("theFunc2", func(r *RStream) {
+			if err := sh.RegisterFunction("theFunc2", func(r *rStream) {
 				logger := common.GetLoggerFor("theApp")
 				ist, err := common.LStReader(r)
 				if err != nil {
@@ -35,7 +35,7 @@ func TestClientBasic(t *testing.T) {
 			}
 			return nil
 		},
-		func(ch *ClientHost, cnt Connector, logger *slog.Logger) error {
+		func(ch ClientHost, cnt Connector, logger *slog.Logger) error {
 			st1, err := ch.OpenStream(cnt, "", "theFunc1")
 			if err != nil {
 				return err
@@ -72,8 +72,8 @@ func TestClientBasic(t *testing.T) {
 func TestSimpleUseCase(t *testing.T) {
 	td := t.TempDir()
 	cancel, err := RunQstfTestClientServer(td,
-		func(sh *ServerHost) error {
-			if err := sh.RegisterFunction("theFuncThatLog", func(r *RStream) {
+		func(sh ServerHost) error {
+			if err := sh.RegisterFunction("theFuncThatLog", func(r *rStream) {
 				logger := common.GetLoggerFor("theApp")
 				ist, err := common.LStReader(r)
 				if err != nil {
@@ -86,7 +86,7 @@ func TestSimpleUseCase(t *testing.T) {
 			}
 			return nil
 		},
-		func(ch *ClientHost, cnt Connector, logger *slog.Logger) error {
+		func(ch ClientHost, cnt Connector, logger *slog.Logger) error {
 			st, err := ch.OpenStream(cnt, "", "theFuncThatLog")
 			if err != nil {
 				return err

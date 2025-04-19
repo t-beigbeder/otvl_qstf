@@ -16,8 +16,8 @@ const testHost = "localhost"
 
 func RunQstfTestServer(
 	testDir string,
-	configureServer func(*ServerHost) error,
-) (*ServerHost, string, context.CancelFunc, map[string]string, error) {
+	configureServer func(ServerHost) error,
+) (ServerHost, string, context.CancelFunc, map[string]string, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	var (
 		cfs        map[string]string
@@ -77,8 +77,8 @@ func RunQstfTestServer(
 
 func RunQstfTestClientServer(
 	testDir string,
-	configureServer func(*ServerHost) error,
-	clientDoer func(*ClientHost, Connector, *slog.Logger) error,
+	configureServer func(ServerHost) error,
+	clientDoer func(ClientHost, Connector, *slog.Logger) error,
 ) (context.CancelFunc, error) {
 	sh, port, cancel, cfs, err := RunQstfTestServer(testDir, configureServer)
 	if err != nil {
@@ -95,7 +95,7 @@ func RunQstfTestClientServer(
 		TlsOptions: quicutils.TlsOptions{CACertFile: cfs["cac"]},
 		Alpns:      netutils.NextProtosFor(QstfAlpn),
 	}
-	cnt, err := NewConnector(testHost+":"+port, sh.HostId, qo, 0, logger)
+	cnt, err := NewConnector(testHost+":"+port, sh.HostId(), qo, 0, logger)
 	if err != nil {
 		return nil, err
 	}

@@ -83,25 +83,34 @@ func NewConnector(addr, hostId string, qo *quicutils.QuicOptions, dialTimeout ti
 	return cnr, nil
 }
 
-type ClientHost struct {
+type clientHost struct {
 	logger         *slog.Logger
 	mx             sync.Mutex
 	cntRegistry    map[uuid.UUID]*connector
-	streamRegistry map[uuid.UUID]*WStream
-	HostId         string
+	streamRegistry map[uuid.UUID]*wStream
+	hostId         string
 }
 
-func NewClientHost(logger *slog.Logger, hostId string) *ClientHost {
-	ch := &ClientHost{
+type ClientHost interface {
+	GetHostId() string
+	OpenStream(cnti Connector, streamId string, fName string) (WStream, error)
+}
+
+var _ ClientHost = &clientHost{}
+
+func NewClientHost(logger *slog.Logger, hostId string) ClientHost {
+	ch := &clientHost{
 		logger:         logger,
 		cntRegistry:    make(map[uuid.UUID]*connector),
-		streamRegistry: make(map[uuid.UUID]*WStream),
-		HostId:         hostId,
+		streamRegistry: make(map[uuid.UUID]*wStream),
+		hostId:         hostId,
 	}
 	return ch
 }
 
-func (ch *ClientHost) OpenStream(cnti Connector, streamId string, fName string) (*WStream, error) {
+func (ch *clientHost) GetHostId() string { return ch.hostId }
+
+func (ch *clientHost) OpenStream(cnti Connector, streamId string, fName string) (WStream, error) {
 	var (
 		id  uuid.UUID
 		cnt *connector
@@ -159,7 +168,7 @@ func (ch *ClientHost) OpenStream(cnti Connector, streamId string, fName string) 
 		cnt.logger.Error("openStream: lstWriter fName", "err", err)
 		return nil, err
 	}
-	mst := &WStream{
+	mst := &wStream{
 		ch:     ch,
 		qcn:    qcn,
 		logger: cnt.logger.With("host", cnt.HostId(), "id", id, "fName", fName),
@@ -173,7 +182,7 @@ func (ch *ClientHost) OpenStream(cnti Connector, streamId string, fName string) 
 	return mst, nil
 }
 
-func (ch *ClientHost) registerCnt(cnt *connector) error {
+func (ch *clientHost) registerCnt(cnt *connector) error {
 	ch.mx.Lock()
 	defer ch.mx.Unlock()
 	_, ok := ch.cntRegistry[cnt.uid]
@@ -184,7 +193,7 @@ func (ch *ClientHost) registerCnt(cnt *connector) error {
 	return nil
 }
 
-func (ch *ClientHost) unregisterCnt(cnt *connector) error {
+func (ch *clientHost) unregisterCnt(cnt *connector) error {
 	ch.mx.Lock()
 	defer ch.mx.Unlock()
 	_, ok := ch.cntRegistry[cnt.uid]
@@ -195,7 +204,7 @@ func (ch *ClientHost) unregisterCnt(cnt *connector) error {
 	return nil
 }
 
-func (ch *ClientHost) registerStream(mst *WStream) error {
+func (ch *clientHost) registerStream(mst *wStream) error {
 	ch.mx.Lock()
 	defer ch.mx.Unlock()
 	_, ok := ch.streamRegistry[mst.id]
@@ -206,7 +215,7 @@ func (ch *ClientHost) registerStream(mst *WStream) error {
 	return nil
 }
 
-func (ch *ClientHost) unregisterStream(mst *WStream) error {
+func (ch *clientHost) unregisterStream(mst *wStream) error {
 	ch.mx.Lock()
 	defer ch.mx.Unlock()
 	_, ok := ch.streamRegistry[mst.id]
@@ -217,8 +226,8 @@ func (ch *ClientHost) unregisterStream(mst *WStream) error {
 	return nil
 }
 
-type WStream struct {
-	ch     *ClientHost
+type wStream struct {
+	ch     *clientHost
 	qcn    quic.Connection
 	logger *slog.Logger
 	mx     sync.Mutex
@@ -227,16 +236,18 @@ type WStream struct {
 	id     uuid.UUID
 }
 
-var _ io.WriteCloser = &WStream{}
-var _ Canceler = &WStream{}
+type WStream interface {
+	io.WriteCloser
+	Canceler
+}
 
-func (mst *WStream) Write(p []byte) (int, error) {
+func (mst *wStream) Write(p []byte) (int, error) {
 	n, err := mst.ss.Write(p)
 	mst.onError("write", err)
 	return n, err
 }
 
-func (mst *WStream) close(cancel bool) error {
+func (mst *wStream) close(cancel bool) error {
 	mst.mx.Lock()
 	defer mst.mx.Unlock()
 	var err error
@@ -264,16 +275,16 @@ func (mst *WStream) close(cancel bool) error {
 	return err
 }
 
-func (mst *WStream) Close() error {
+func (mst *wStream) Close() error {
 	return mst.close(false)
 }
 
-func (mst *WStream) Cancel(code quic.StreamErrorCode) {
+func (mst *wStream) Cancel(code quic.StreamErrorCode) {
 	mst.ss.CancelWrite(code)
 	_ = mst.close(true)
 }
 
-func (mst *WStream) onError(from string, err error) {
+func (mst *wStream) onError(from string, err error) {
 	if err == nil {
 		return
 	}

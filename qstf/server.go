@@ -15,31 +15,40 @@ const (
 	QstfAlpn = "x-otvl-qstf-v0.1"
 )
 
-// A ServerHost accepts connections from other hosts and registers functions
-type ServerHost struct {
+type serverHost struct {
 	logger         *slog.Logger
 	lst            *quic.Listener
 	mx             sync.Mutex
-	funcRegistry   map[string]func(*RStream)
-	streamRegistry map[uuid.UUID]*RStream
-	HostId         string
+	funcRegistry   map[string]func(*rStream)
+	streamRegistry map[uuid.UUID]*rStream
+	hostId         string
 }
+
+// A ServerHost accepts connections from other hosts and registers functions
+type ServerHost interface {
+	RegisterFunction(funcName string, f func(*rStream)) error
+	GetFunction(funcName string) func(*rStream)
+	UnregisterFunction(funcName string) error
+	HostId() string
+}
+
+var _ ServerHost = &serverHost{}
 
 // NewServerHost creates host with given hostId to accept QUIC stream openings
 // from remote peers on accepted QUIC connections
-func NewServerHost(ctx context.Context, logger *slog.Logger, lst *quic.Listener, hostId string) *ServerHost {
-	sh := &ServerHost{
+func NewServerHost(ctx context.Context, logger *slog.Logger, lst *quic.Listener, hostId string) ServerHost {
+	sh := &serverHost{
 		logger:         logger.With("hostId", hostId),
 		lst:            lst,
-		funcRegistry:   make(map[string]func(*RStream)),
-		streamRegistry: make(map[uuid.UUID]*RStream),
-		HostId:         hostId,
+		funcRegistry:   make(map[string]func(*rStream)),
+		streamRegistry: make(map[uuid.UUID]*rStream),
+		hostId:         hostId,
 	}
 	go sh.accept(ctx)
 	return sh
 }
 
-func (sh *ServerHost) RegisterFunction(funcName string, f func(*RStream)) error {
+func (sh *serverHost) RegisterFunction(funcName string, f func(*rStream)) error {
 	sh.mx.Lock()
 	defer sh.mx.Unlock()
 	_, ok := sh.funcRegistry[funcName]
@@ -50,14 +59,14 @@ func (sh *ServerHost) RegisterFunction(funcName string, f func(*RStream)) error 
 	return nil
 }
 
-func (sh *ServerHost) GetFunction(funcName string) func(*RStream) {
+func (sh *serverHost) GetFunction(funcName string) func(*rStream) {
 	sh.mx.Lock()
 	defer sh.mx.Unlock()
 	fc, _ := sh.funcRegistry[funcName]
 	return fc
 }
 
-func (sh *ServerHost) UnregisterFunction(funcName string) error {
+func (sh *serverHost) UnregisterFunction(funcName string) error {
 	sh.mx.Lock()
 	defer sh.mx.Unlock()
 	_, ok := sh.funcRegistry[funcName]
@@ -68,7 +77,11 @@ func (sh *ServerHost) UnregisterFunction(funcName string) error {
 	return nil
 }
 
-func (sh *ServerHost) accept(ctx context.Context) {
+func (sh *serverHost) HostId() string {
+	return sh.hostId
+}
+
+func (sh *serverHost) accept(ctx context.Context) {
 	for {
 		cnc, err := sh.lst.Accept(ctx)
 		if err != nil {
@@ -81,7 +94,7 @@ func (sh *ServerHost) accept(ctx context.Context) {
 	}
 }
 
-func (sh *ServerHost) acceptStreams(ctx context.Context, cnc quic.Connection, biDir bool) {
+func (sh *serverHost) acceptStreams(ctx context.Context, cnc quic.Connection, biDir bool) {
 	go func() {
 		for {
 			st, err := cnc.AcceptStream(ctx)
@@ -104,7 +117,7 @@ func (sh *ServerHost) acceptStreams(ctx context.Context, cnc quic.Connection, bi
 	}()
 }
 
-func (sh *ServerHost) registerStream(mst *RStream) error {
+func (sh *serverHost) registerStream(mst *rStream) error {
 	sh.mx.Lock()
 	defer sh.mx.Unlock()
 	_, ok := sh.streamRegistry[mst.id]
@@ -115,7 +128,7 @@ func (sh *ServerHost) registerStream(mst *RStream) error {
 	return nil
 }
 
-func (sh *ServerHost) unregisterStream(mst *RStream) error {
+func (sh *serverHost) unregisterStream(mst *rStream) error {
 	sh.mx.Lock()
 	defer sh.mx.Unlock()
 	_, ok := sh.streamRegistry[mst.id]
@@ -130,16 +143,20 @@ type Canceler interface {
 	Cancel(code quic.StreamErrorCode)
 }
 
-type RStream struct {
-	sh *ServerHost
+type RStream interface {
+	io.Reader
+	Canceler
+}
+
+type rStream struct {
+	sh *serverHost
 	rs quic.ReceiveStream
 	id uuid.UUID
 }
 
-var _ io.Reader = &RStream{}
-var _ Canceler = &RStream{}
+var _ RStream = &rStream{}
 
-func (mst *RStream) Read(p []byte) (int, error) {
+func (mst *rStream) Read(p []byte) (int, error) {
 	n, err := mst.rs.Read(p)
 	if err != nil {
 		iErr := mst.sh.unregisterStream(mst)
@@ -150,7 +167,7 @@ func (mst *RStream) Read(p []byte) (int, error) {
 	return n, err
 }
 
-func (mst *RStream) Cancel(code quic.StreamErrorCode) {
+func (mst *rStream) Cancel(code quic.StreamErrorCode) {
 	mst.rs.CancelRead(code)
 	iErr := mst.sh.unregisterStream(mst)
 	if iErr != nil {
@@ -158,7 +175,7 @@ func (mst *RStream) Cancel(code quic.StreamErrorCode) {
 	}
 }
 
-func (sh *ServerHost) initStream(st quic.ReceiveStream) {
+func (sh *serverHost) initStream(st quic.ReceiveStream) {
 	hid, err := common.LStReader(st)
 	if err != nil {
 		sh.logger.Error("read hostId error", "err", err)
@@ -177,14 +194,14 @@ func (sh *ServerHost) initStream(st quic.ReceiveStream) {
 		return
 	}
 	sh.logger.Debug("initStream", "hostId", hid, "stId", stId, "fn", fn)
-	var fc func(*RStream)
+	var fc func(*rStream)
 	if fn != "" {
 		if fc = sh.GetFunction(fn); fc == nil {
 			sh.logger.Error("func does not exist", "funcName", fn)
 			return
 		}
 	}
-	mst := &RStream{sh: sh, rs: st, id: stId}
+	mst := &rStream{sh: sh, rs: st, id: stId}
 	err = sh.registerStream(mst)
 	if err != nil {
 		sh.logger.Error("initStream error", "err", err)
