@@ -16,12 +16,13 @@ const (
 )
 
 type serverHost struct {
-	logger         *slog.Logger
-	lst            *quic.Listener
-	mx             sync.Mutex
-	funcRegistry   map[string]func(*rStream)
-	streamRegistry map[uuid.UUID]*rStream
-	hostId         string
+	logger            *slog.Logger
+	lst               *quic.Listener
+	mx                sync.Mutex
+	funcRegistry      map[string]func(*rStream)
+	streamRegistry    map[uuid.UUID]*rStream
+	hostId            string
+	sdStarted, sdDone chan struct{}
 }
 
 // A ServerHost accepts connections from other hosts and registers functions
@@ -30,6 +31,7 @@ type ServerHost interface {
 	GetFunction(funcName string) func(*rStream)
 	UnregisterFunction(funcName string) error
 	HostId() string
+	Shutdown()
 }
 
 var _ ServerHost = &serverHost{}
@@ -43,6 +45,8 @@ func NewServerHost(ctx context.Context, logger *slog.Logger, lst *quic.Listener,
 		funcRegistry:   make(map[string]func(*rStream)),
 		streamRegistry: make(map[uuid.UUID]*rStream),
 		hostId:         hostId,
+		sdStarted:      make(chan struct{}),
+		sdDone:         make(chan struct{}),
 	}
 	go sh.accept(ctx)
 	return sh
@@ -81,19 +85,68 @@ func (sh *serverHost) HostId() string {
 	return sh.hostId
 }
 
+func (sh *serverHost) Shutdown() {
+	sh.sdStarted <- struct{}{}
+	<-sh.sdDone
+}
+
 func (sh *serverHost) accept(ctx context.Context) {
+	jc := common.NewJobController(sh.logger)
+	go sh.waitForShutdown(jc)
 	for {
 		cnc, err := sh.lst.Accept(ctx)
 		if err != nil {
 			sh.logger.Error("accept error", "err", err)
-			return
+			break
 		}
-		sh.logger.Debug("accepted a connection", "remote", cnc.RemoteAddr().String())
-		go sh.acceptStreams(ctx, cnc, false)
-		go sh.acceptStreams(ctx, cnc, true)
+		err = sh.handleConnexion(ctx, jc, cnc)
+		if err != nil {
+			break
+		}
 	}
 }
 
+func (sh *serverHost) waitForShutdown(jc common.JobController) {
+	for {
+		select {
+		case <-sh.sdStarted:
+			jc.Shutdown()
+			sh.sdDone <- struct{}{}
+			return
+		}
+	}
+}
+
+func (sh *serverHost) handleConnexion(ctx context.Context, jc common.JobController, cnc quic.Connection) error {
+	cnl := cnc.RemoteAddr().String()
+	logger := sh.logger.With("remote", cnl)
+	logger.Info("handleConnexion new connection")
+	cncJob := &common.Job{
+		Label: cnl,
+		Run: func(ctx context.Context) error {
+			wg := sync.WaitGroup{}
+			wg.Add(2)
+			go func() {
+				sh.acceptStreams(ctx, cnc, false)
+				wg.Done()
+			}()
+			go func() {
+				sh.acceptStreams(ctx, cnc, true)
+				wg.Done()
+			}()
+			wg.Wait()
+			return nil
+		},
+	}
+	err := jc.RunJob(ctx, cncJob)
+	if err != nil {
+		logger.Error("handleConnexion error", "err", err)
+		return err
+	}
+	return nil
+}
+
+// FIXME
 func (sh *serverHost) acceptStreams(ctx context.Context, cnc quic.Connection, biDir bool) {
 	go func() {
 		for {

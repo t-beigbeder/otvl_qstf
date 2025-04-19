@@ -18,7 +18,7 @@ func RunQstfTestServer(
 	testDir string,
 	configureServer func(ServerHost) error,
 ) (ServerHost, string, context.CancelFunc, map[string]string, error) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cCancel := context.WithCancel(context.Background())
 	var (
 		cfs        map[string]string
 		err        error
@@ -29,7 +29,7 @@ func RunQstfTestServer(
 	)
 	defer func() {
 		if err != nil {
-			cancel()
+			cCancel()
 		}
 	}()
 	cfs, err = netutils.NewTestCerts(testDir, []string{testHost}, true)
@@ -72,6 +72,10 @@ func RunQstfTestServer(
 			return nil, "", nil, nil, err
 		}
 	}
+	cancel := func() {
+		cCancel()
+		sh.Shutdown()
+	}
 	return sh, port, cancel, cfs, nil
 }
 
@@ -108,7 +112,7 @@ func RunQstfTestClientServer(
 	if err != nil {
 		return nil, err
 	}
-	time.Sleep(10 * time.Millisecond)
+	//time.Sleep(10 * time.Millisecond)
 	err = stc.Close()
 	if err != nil {
 		return nil, err
