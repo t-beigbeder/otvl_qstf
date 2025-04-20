@@ -58,7 +58,7 @@ func TestClientBasic(t *testing.T) {
 				return err
 			}
 			require.NoError(t, err)
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(100 * time.Millisecond) // FIXME
 			err = st2.Close()
 			if err != nil {
 				return err
@@ -68,7 +68,7 @@ func TestClientBasic(t *testing.T) {
 		},
 	)
 	require.NoError(t, err)
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond) // FIXME
 	cancel()
 }
 

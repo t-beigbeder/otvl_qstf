@@ -16,11 +16,11 @@ type jobctl struct {
 
 type Job struct {
 	Label string
-	Run   func(context.Context) error
+	Run   func(context.Context, any) error
 }
 
 type JobController interface {
-	RunJob(ctx context.Context, job *Job) error
+	RunJob(ctx context.Context, job *Job, arg any) error
 	Shutdown()
 }
 
@@ -32,7 +32,7 @@ func NewJobController(logger *slog.Logger) JobController {
 	return jc
 }
 
-func (jc *jobctl) RunJob(ctx context.Context, job *Job) error {
+func (jc *jobctl) RunJob(ctx context.Context, job *Job, arg any) error {
 	jc.mx.Lock()
 	defer jc.mx.Unlock()
 	_, ok := jc.running[job.Label]
@@ -45,7 +45,7 @@ func (jc *jobctl) RunJob(ctx context.Context, job *Job) error {
 
 	go func() {
 		defer jc.wg.Done()
-		err := job.Run(ctx)
+		err := job.Run(ctx, arg)
 		if err == nil {
 			jc.logger.Info("runJob job done", "job", job.Label)
 		} else {

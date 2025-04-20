@@ -13,8 +13,8 @@ func TestJobController(t *testing.T) {
 		logger := logger.With("doer", label)
 		job := &Job{
 			Label: label,
-			Run: func(ctx context.Context) error {
-				logger.Info("doing")
+			Run: func(ctx context.Context, arg any) error {
+				logger.Info("doing", "arg", arg)
 				select {
 				case <-ctx.Done():
 					logger.Info("context done")
@@ -26,11 +26,11 @@ func TestJobController(t *testing.T) {
 	}
 	jc := NewJobController(logger.With("controller", "this"))
 	ctx, cancel := context.WithCancel(context.Background())
-	err := jc.RunJob(ctx, getJob(context.Background(), "job1", nil))
+	err := jc.RunJob(ctx, getJob(context.Background(), "job1", nil), "arg1")
 	require.NoError(t, err)
-	err = jc.RunJob(ctx, getJob(context.Background(), "job1", nil))
+	err = jc.RunJob(ctx, getJob(context.Background(), "job1", nil), nil)
 	require.NotNil(t, err)
-	err = jc.RunJob(ctx, getJob(context.Background(), "job2", errors.New("error on job2")))
+	err = jc.RunJob(ctx, getJob(context.Background(), "job2", errors.New("error on job2")), nil)
 	require.NoError(t, err)
 	go func() {
 		cancel()

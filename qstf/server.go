@@ -91,22 +91,24 @@ func (sh *serverHost) Shutdown() {
 }
 
 func (sh *serverHost) accept(ctx context.Context) {
-	sjc := common.NewJobController(sh.logger)
-	go sh.waitForShutdown(sjc)
+	jc := common.NewJobController(sh.logger)
+	go sh.waitForShutdown(jc)
 	for {
 		cnc, err := sh.lst.Accept(ctx)
 		if err != nil {
 			sh.logger.Error("accept error", "err", err)
 			break
 		}
-		cjc := common.NewJobController(sh.logger.With("cnc", cnc.RemoteAddr().String()))
-		// FIXME
-		err = sh.acceptStreams(ctx, cjc, cnc, false)
-		if err != nil {
-			break
-		}
-		err = sh.acceptStreams(ctx, cjc, cnc, true)
-		if err != nil {
+		if err := jc.RunJob(ctx, &common.Job{
+			Label: "connection " + cnc.RemoteAddr().String(),
+			Run: func(ctx context.Context, acnc any) error {
+				cnc, ok := acnc.(quic.Connection)
+				if !ok {
+					return fmt.Errorf("invalid connection type %T", acnc)
+				}
+				return sh.handleConnection(ctx, cnc)
+			},
+		}, cnc); err != nil {
 			break
 		}
 	}
@@ -123,30 +125,60 @@ func (sh *serverHost) waitForShutdown(jc common.JobController) {
 	}
 }
 
-func (sh *serverHost) acceptStreams(ctx context.Context, jc common.JobController, cnc quic.Connection, biDir bool) error {
-	cnl := cnc.RemoteAddr().String()
-	pName := "acceptStreamUni"
-	if biDir {
-		pName = "acceptStream"
+func (sh *serverHost) handleConnection(ctx context.Context, cnc quic.Connection) error {
+	logger := sh.logger.With("cnc", cnc.RemoteAddr().String())
+	jc := common.NewJobController(logger)
+	var err error
+	defer func() {
+		jc.Shutdown()
+		sErr := ""
+		if err != nil {
+			sErr = err.Error()
+		}
+		logger.Info("close QUIC connection", "err", sErr)
+		iErr := cnc.CloseWithError(0, sErr)
+		if iErr != nil {
+			logger.Error("closeWithError error", "err", iErr)
+		}
+	}()
+
+	if err = sh.addStreamAcceptor(ctx, jc, cnc, false); err != nil {
+		return err
 	}
-	label := fmt.Sprintf("%s(%s)", pName, cnl)
-	cncJob := &common.Job{
-		Label: label,
-		Run: func(ctx context.Context) error {
-			for {
-				st, err := cnc.AcceptStream(ctx)
-				if err != nil {
-					return err
-				}
-				sh.initStream(st)
-			}
-		},
-	}
-	err := jc.RunJob(ctx, cncJob)
-	if err != nil {
+	if err = sh.addStreamAcceptor(ctx, jc, cnc, true); err != nil {
 		return err
 	}
 	return nil
+}
+
+func (sh *serverHost) addStreamAcceptor(ctx context.Context, jc common.JobController, cnc quic.Connection, bidir bool) error {
+	cnl := cnc.RemoteAddr().String()
+	label := fmt.Sprintf("acceptStreamUni(%s)", cnl)
+	if bidir {
+		label = fmt.Sprintf("acceptStream(%s)", cnl)
+	}
+	return jc.RunJob(ctx, &common.Job{
+		Label: label,
+		Run: func(ctx context.Context, _ any) error {
+			for {
+				var (
+					st  quic.ReceiveStream
+					err error
+				)
+				if bidir {
+					st, err = cnc.AcceptStream(ctx)
+				} else {
+					st, err = cnc.AcceptUniStream(ctx)
+				}
+				if err != nil {
+					return err
+				}
+				if err = sh.handleStream(ctx, jc, cnc, st); err != nil {
+					return err
+				}
+			}
+		},
+	}, nil)
 }
 
 func (sh *serverHost) registerStream(mst *rStream) error {
@@ -205,6 +237,17 @@ func (mst *rStream) Cancel(code quic.StreamErrorCode) {
 	if iErr != nil {
 		mst.sh.logger.Error("unregisterStream error", "err", iErr)
 	}
+}
+
+func (sh *serverHost) handleStream(ctx context.Context, jc common.JobController, cnc quic.Connection, st quic.ReceiveStream) error {
+	label := fmt.Sprintf("stream(%s,%d)", cnc.RemoteAddr().String(), st.StreamID())
+	return jc.RunJob(ctx, &common.Job{
+		Label: label,
+		Run: func(ctx context.Context, _ any) error {
+			sh.initStream(st)
+			return nil
+		},
+	}, nil)
 }
 
 func (sh *serverHost) initStream(st quic.ReceiveStream) {
