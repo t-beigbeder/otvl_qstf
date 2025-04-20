@@ -57,7 +57,13 @@ which unblock them immediately.
 
     server
       controller
-        connexion
+        connection
           controller
             stream
               function
+
+    client
+      controller
+        connection
+          controller
+            stream

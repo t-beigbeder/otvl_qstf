@@ -56,7 +56,7 @@ func NewConnector(addr, hostId string, qo *quicutils.QuicOptions, dialTimeout ti
 			uidSet = true
 		}
 	}
-	if hostId == "" || !uidSet {
+	if !uidSet {
 		uid, err = uuid.NewV7()
 		if err == nil {
 			uidSet = true
