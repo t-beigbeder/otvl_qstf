@@ -91,9 +91,29 @@ type clientHost struct {
 	hostId         string
 }
 
+func (ch *clientHost) RegisterFunction(funcName string, f func(*rStream)) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (ch *clientHost) GetFunction(funcName string) func(*rStream) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (ch *clientHost) UnregisterFunction(funcName string) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (ch *clientHost) Shutdown() {
+	//TODO implement me
+	panic("implement me")
+}
+
 type ClientHost interface {
-	GetHostId() string
 	OpenStream(cnti Connector, streamId string, fName string) (WStream, error)
+	ServerHost
 }
 
 var _ ClientHost = &clientHost{}
@@ -108,7 +128,7 @@ func NewClientHost(logger *slog.Logger, hostId string) ClientHost {
 	return ch
 }
 
-func (ch *clientHost) GetHostId() string { return ch.hostId }
+func (ch *clientHost) HostId() string { return ch.hostId }
 
 func (ch *clientHost) OpenStream(cnti Connector, streamId string, fName string) (WStream, error) {
 	var (

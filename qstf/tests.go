@@ -84,13 +84,13 @@ func RunQstfTestClientServer(
 	configureServer func(ServerHost) error,
 	clientDoer func(ClientHost, Connector, *slog.Logger) error,
 ) (context.CancelFunc, error) {
-	sh, port, cancel, cfs, err := RunQstfTestServer(testDir, configureServer)
+	sh, port, sCancel, cfs, err := RunQstfTestServer(testDir, configureServer)
 	if err != nil {
 		return nil, err
 	}
 	defer func() {
 		if err != nil {
-			cancel()
+			sCancel()
 		}
 	}()
 	logger := common.GetLoggerFor("test-client")
@@ -115,6 +115,11 @@ func RunQstfTestClientServer(
 	err = stc.Close()
 	if err != nil {
 		return nil, err
+	}
+	cancel := func() {
+		sCancel()
+		logger.Info("FIXME: shutdown client")
+		//ch.Shutdown() // FIXME
 	}
 	return cancel, nil
 }
