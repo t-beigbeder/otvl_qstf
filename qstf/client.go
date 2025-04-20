@@ -89,6 +89,7 @@ type clientHost struct {
 	cntRegistry    map[uuid.UUID]*connector
 	streamRegistry map[uuid.UUID]*wStream
 	hostId         string
+	jc             common.JobController
 }
 
 func (ch *clientHost) RegisterFunction(funcName string, f func(*rStream)) error {
@@ -124,6 +125,7 @@ func NewClientHost(logger *slog.Logger, hostId string) ClientHost {
 		cntRegistry:    make(map[uuid.UUID]*connector),
 		streamRegistry: make(map[uuid.UUID]*wStream),
 		hostId:         hostId,
+		jc:             common.NewJobController(logger),
 	}
 	return ch
 }
@@ -194,6 +196,7 @@ func (ch *clientHost) OpenStream(cnti Connector, streamId string, fName string) 
 		logger: cnt.logger.With("host", cnt.HostId(), "id", id, "fName", fName),
 		ss:     ss,
 		id:     id,
+		done:   make(chan struct{}),
 	}
 	if err = ch.registerStream(mst); err != nil {
 		cnt.logger.Error("registerStream", "err", err)
@@ -254,6 +257,7 @@ type wStream struct {
 	closed bool
 	ss     quic.SendStream
 	id     uuid.UUID
+	done   chan struct{}
 }
 
 type WStream interface {
