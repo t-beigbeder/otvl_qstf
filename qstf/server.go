@@ -91,15 +91,21 @@ func (sh *serverHost) Shutdown() {
 }
 
 func (sh *serverHost) accept(ctx context.Context) {
-	jc := common.NewJobController(sh.logger)
-	go sh.waitForShutdown(jc)
+	sjc := common.NewJobController(sh.logger)
+	go sh.waitForShutdown(sjc)
 	for {
 		cnc, err := sh.lst.Accept(ctx)
 		if err != nil {
 			sh.logger.Error("accept error", "err", err)
 			break
 		}
-		err = sh.handleConnexion(ctx, jc, cnc)
+		cjc := common.NewJobController(sh.logger.With("cnc", cnc.RemoteAddr().String()))
+		// FIXME
+		err = sh.acceptStreams(ctx, cjc, cnc, false)
+		if err != nil {
+			break
+		}
+		err = sh.acceptStreams(ctx, cjc, cnc, true)
 		if err != nil {
 			break
 		}
@@ -117,57 +123,30 @@ func (sh *serverHost) waitForShutdown(jc common.JobController) {
 	}
 }
 
-func (sh *serverHost) handleConnexion(ctx context.Context, jc common.JobController, cnc quic.Connection) error {
+func (sh *serverHost) acceptStreams(ctx context.Context, jc common.JobController, cnc quic.Connection, biDir bool) error {
 	cnl := cnc.RemoteAddr().String()
-	logger := sh.logger.With("remote", cnl)
-	logger.Info("handleConnexion new connection")
+	pName := "acceptStreamUni"
+	if biDir {
+		pName = "acceptStream"
+	}
+	label := fmt.Sprintf("%s(%s)", pName, cnl)
 	cncJob := &common.Job{
-		Label: cnl,
+		Label: label,
 		Run: func(ctx context.Context) error {
-			wg := sync.WaitGroup{}
-			wg.Add(2)
-			go func() {
-				sh.acceptStreams(ctx, cnc, false)
-				wg.Done()
-			}()
-			go func() {
-				sh.acceptStreams(ctx, cnc, true)
-				wg.Done()
-			}()
-			wg.Wait()
-			return nil
+			for {
+				st, err := cnc.AcceptStream(ctx)
+				if err != nil {
+					return err
+				}
+				sh.initStream(st)
+			}
 		},
 	}
 	err := jc.RunJob(ctx, cncJob)
 	if err != nil {
-		logger.Error("handleConnexion error", "err", err)
 		return err
 	}
 	return nil
-}
-
-// FIXME
-func (sh *serverHost) acceptStreams(ctx context.Context, cnc quic.Connection, biDir bool) {
-	go func() {
-		for {
-			st, err := cnc.AcceptStream(ctx)
-			if err != nil {
-				sh.logger.Error("accept stream error", "err", err)
-				return
-			}
-			sh.initStream(st)
-		}
-	}()
-	go func() {
-		for {
-			st, err := cnc.AcceptUniStream(ctx)
-			if err != nil {
-				sh.logger.Error("accept unistream error", "err", err)
-				return
-			}
-			sh.initStream(st)
-		}
-	}()
 }
 
 func (sh *serverHost) registerStream(mst *rStream) error {
